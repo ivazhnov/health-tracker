@@ -3,7 +3,12 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/server/auth/session";
 import { validateBatch } from "@/server/import-file-rules";
-import { getProfile, failImport, uploadImport } from "@/server/services";
+import {
+  getProfile,
+  failImport,
+  recogniseImport,
+  uploadImport,
+} from "@/server/services";
 
 export async function uploadFilesAction(formData: FormData) {
   await requireSession();
@@ -35,12 +40,13 @@ export async function uploadFilesAction(formData: FormData) {
     }
 
     try {
-      const success = await uploadImport(profileId, {
+      const importSessionId = await uploadImport(profileId, {
         ...fileInfo(file),
         contents: new Uint8Array(await file.arrayBuffer()),
       });
-      if (success) {
+      if (importSessionId) {
         uploaded += 1;
+        await recogniseImport(importSessionId);
       } else {
         failed += 1;
       }

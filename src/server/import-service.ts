@@ -20,7 +20,7 @@ export function createImportService(
           sizeBytes: file.size,
           errorMessage: validation.error,
         });
-        return false;
+        return null;
       }
 
       try {
@@ -28,7 +28,7 @@ export function createImportService(
           validation.value.sha256,
           file.contents,
         );
-        repository.createUploaded({
+        return repository.createUploaded({
           profileId,
           originalFileName: cleanFileName(file.name),
           mediaType: validation.value.mediaType,
@@ -36,7 +36,6 @@ export function createImportService(
           sha256: validation.value.sha256,
           storagePath,
         });
-        return true;
       } catch {
         repository.createFailed({
           profileId,
@@ -45,7 +44,7 @@ export function createImportService(
           sizeBytes: file.size,
           errorMessage: "Не удалось сохранить файл.",
         });
-        return false;
+        return null;
       }
     },
 

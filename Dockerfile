@@ -20,6 +20,17 @@ ENV DATA_DIR=/data
 
 RUN groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs nextjs \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-deu \
+    tesseract-ocr-eng \
+    tesseract-ocr-fra \
+    tesseract-ocr-ita \
+    tesseract-ocr-rus \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /data \
   && chown nextjs:nodejs /data
 

@@ -624,6 +624,17 @@ a {
   background: #fbe8e6;
 }
 
+.badge.status-needs_review,
+.badge.status-confirmed {
+  color: #185f40;
+  background: var(--accent-soft);
+}
+
+.badge.status-extracting {
+  color: #735c13;
+  background: #fff3c7;
+}
+
 .document-layout {
   display: grid;
   grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.75fr);
@@ -668,6 +679,79 @@ a {
 }
 
 .file-title {
+  overflow-wrap: anywhere;
+}
+
+.document-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.document-actions form {
+  margin: 0;
+}
+
+.extraction-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.extraction-summary div {
+  display: grid;
+  gap: 6px;
+}
+
+.extraction-summary span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.warning-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.warning-list p {
+  margin: 0;
+  padding: 12px 14px;
+  color: #735c13;
+  background: #fff3c7;
+  border-radius: 10px;
+}
+
+.draft-card h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.draft-card td strong,
+.draft-card td small {
+  display: block;
+}
+
+.draft-card td small {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.extracted-text summary {
+  color: var(--accent);
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.extracted-text pre {
+  max-height: 520px;
+  margin: 20px 0 0;
+  overflow: auto;
+  color: #29352f;
+  font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    monospace;
+  white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
@@ -722,7 +806,8 @@ th {
   .profile-grid,
   .form-grid,
   .form-grid.three-columns,
-  .document-layout {
+  .document-layout,
+  .extraction-summary {
     grid-template-columns: 1fr;
   }
 
