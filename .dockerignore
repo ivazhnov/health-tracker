@@ -2,6 +2,9 @@ node_modules
 .next
 .git
 .data
-outputs
+.env
+.env.*
+!.env.example
+docs
 npm-debug.log*
 .DS_Store

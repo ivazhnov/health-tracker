@@ -4,15 +4,11 @@ export const dynamic = "force-dynamic";
 
 export function GET() {
   try {
-    const status = getApplicationStatus();
+    const { schemaVersion } = getApplicationStatus();
 
     return Response.json({
       status: "ok",
-      storage: {
-        installationId: status.installationId,
-        createdAt: status.createdAt,
-        schemaVersion: status.schemaVersion,
-      },
+      schemaVersion,
     });
   } catch (error) {
     console.error(
