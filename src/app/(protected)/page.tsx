@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { logoutAction, selectProfileAction } from "@/app/actions";
-import { getApplicationStatus, listProfiles } from "@/server/services";
+import { ImportList } from "@/app/imports/import-list";
+import {
+  getApplicationStatus,
+  listImports,
+  listProfiles,
+} from "@/server/services";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +20,9 @@ export default async function Home({ searchParams }: HomeProps) {
   const activeId = Number(cookieStore.get("active_profile_id")?.value);
   const activeProfile =
     profiles.find(({ id }) => id === activeId) ?? profiles[0] ?? null;
+  const recentImports = activeProfile
+    ? listImports(activeProfile.id).slice(0, 5)
+    : [];
   const status = getApplicationStatus();
   const { error, saved } = await searchParams;
 
@@ -101,12 +109,22 @@ export default async function Home({ searchParams }: HomeProps) {
 
           {activeProfile ? (
             <section className="selected-summary">
-              <p className="status-label">Активный профиль</p>
-              <h2>{fullName(activeProfile.firstName, activeProfile.lastName)}</h2>
-              <p>
-                На следующем этапе сюда добавится загрузка лабораторных
-                документов.
-              </p>
+              <div className="section-heading compact">
+                <div>
+                  <p className="status-label">Активный профиль</p>
+                  <h2>
+                    {fullName(activeProfile.firstName, activeProfile.lastName)}
+                  </h2>
+                </div>
+                <Link className="primary-button" href="/imports/new">
+                  Загрузить анализы
+                </Link>
+              </div>
+              <div className="recent-imports-heading">
+                <h3>Последние загрузки</h3>
+                <Link href="/imports">Вся история</Link>
+              </div>
+              <ImportList imports={recentImports} />
             </section>
           ) : null}
         </>

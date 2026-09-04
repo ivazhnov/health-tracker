@@ -13,7 +13,7 @@ const globalDatabase = globalThis as typeof globalThis & {
 
 export function getDatabase() {
   if (!globalDatabase.healthArchiveDatabase) {
-    const dataDirectory = process.env.DATA_DIR ?? path.join(process.cwd(), ".data");
+    const dataDirectory = getDataDirectory();
     mkdirSync(dataDirectory, { recursive: true });
 
     const database = new DatabaseSync(
@@ -30,6 +30,10 @@ export function getDatabase() {
   }
 
   return globalDatabase.healthArchiveDatabase;
+}
+
+export function getDataDirectory() {
+  return process.env.DATA_DIR ?? path.join(process.cwd(), ".data");
 }
 
 export function createSqliteApplicationStatusRepository(

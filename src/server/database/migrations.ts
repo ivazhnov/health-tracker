@@ -51,4 +51,41 @@ export const migrations: Migration[] = [
       ON body_measurements (profile_id, measured_at DESC);
     `,
   },
+  {
+    version: 3,
+    name: "source_documents_and_import_sessions",
+    sql: `
+      CREATE TABLE source_documents (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sha256 TEXT NOT NULL UNIQUE,
+        storage_path TEXT NOT NULL UNIQUE,
+        media_type TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE TABLE import_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        profile_id INTEGER NOT NULL REFERENCES profiles(id),
+        source_document_id INTEGER REFERENCES source_documents(id),
+        duplicate_of_import_session_id INTEGER REFERENCES import_sessions(id),
+        original_file_name TEXT NOT NULL,
+        media_type TEXT NOT NULL,
+        size_bytes INTEGER NOT NULL,
+        sha256 TEXT,
+        status TEXT NOT NULL CHECK (
+          status IN ('uploaded', 'extracting', 'needs_review', 'confirmed', 'failed')
+        ),
+        error_message TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX import_sessions_profile_created
+      ON import_sessions (profile_id, created_at DESC, id DESC);
+
+      CREATE INDEX import_sessions_document
+      ON import_sessions (source_document_id);
+    `,
+  },
 ];
