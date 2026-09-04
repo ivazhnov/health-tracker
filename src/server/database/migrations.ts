@@ -312,4 +312,47 @@ export const migrations: Migration[] = [
       SELECT id, 'en', 'ast' FROM metric_definitions WHERE key = 'ast';
     `,
   },
+  {
+    version: 5,
+    name: "confirmed_lab_sessions_and_observations",
+    sql: `
+      ALTER TABLE import_sessions ADD COLUMN confirmed_at TEXT;
+
+      CREATE TABLE lab_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        profile_id INTEGER NOT NULL REFERENCES profiles(id),
+        import_session_id INTEGER NOT NULL UNIQUE REFERENCES import_sessions(id),
+        source_document_id INTEGER NOT NULL REFERENCES source_documents(id),
+        collected_at TEXT NOT NULL,
+        laboratory_name TEXT,
+        specimen TEXT,
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE INDEX lab_sessions_profile_date
+      ON lab_sessions (profile_id, collected_at DESC, id DESC);
+
+      CREATE TABLE observations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        lab_session_id INTEGER NOT NULL REFERENCES lab_sessions(id) ON DELETE CASCADE,
+        metric_definition_id INTEGER NOT NULL REFERENCES metric_definitions(id),
+        original_name TEXT NOT NULL,
+        value_text TEXT NOT NULL,
+        value_numeric REAL NOT NULL,
+        comparator TEXT CHECK (comparator IN ('<', '<=', '>', '>=')),
+        unit TEXT,
+        reference_low REAL,
+        reference_high REAL,
+        reference_text TEXT,
+        source_text TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        UNIQUE (lab_session_id, metric_definition_id)
+      );
+
+      CREATE INDEX observations_metric
+      ON observations (metric_definition_id, lab_session_id);
+    `,
+  },
 ];

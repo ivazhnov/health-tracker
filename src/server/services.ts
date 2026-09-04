@@ -1,9 +1,11 @@
 import { createApplicationStatusQuery } from "@/server/application-status";
+import { createConfirmationService } from "@/server/confirmation-service";
 import {
   createSqliteApplicationStatusRepository,
   getDataDirectory,
   getDatabase,
 } from "@/server/database/sqlite";
+import { createSqliteConfirmationRepository } from "@/server/database/sqlite-confirmation";
 import { createSqliteImportRepository } from "@/server/database/sqlite-imports";
 import { createSqliteProfileRepository } from "@/server/database/sqlite-profiles";
 import { createSqliteRecognitionRepository } from "@/server/database/sqlite-recognition";
@@ -13,6 +15,10 @@ import { createLocalDraftExtractor } from "@/server/local-draft-extractor";
 import { createLocalTextExtractor } from "@/server/local-text-extractor";
 import { createRecognitionService } from "@/server/recognition-service";
 import type { ImportRepository, UploadFile } from "@/server/imports";
+import type {
+  ConfirmationRepository,
+  ConfirmImportInput,
+} from "@/server/confirmation";
 import type { ProfileRepository, SaveProfileInput } from "@/server/profiles";
 import type { RecognitionRepository } from "@/server/recognition";
 
@@ -24,6 +30,9 @@ let importRepository: ImportRepository | null = null;
 let importService: ReturnType<typeof createImportService> | null = null;
 let recognitionRepository: RecognitionRepository | null = null;
 let recognitionService: ReturnType<typeof createRecognitionService> | null =
+  null;
+let confirmationRepository: ConfirmationRepository | null = null;
+let confirmationService: ReturnType<typeof createConfirmationService> | null =
   null;
 
 export function getApplicationStatus() {
@@ -87,6 +96,18 @@ export function getRecognitionDraft(importSessionId: number) {
   return recognition().getDraft(importSessionId);
 }
 
+export function listMetricDefinitions() {
+  return confirmations().listMetricDefinitions();
+}
+
+export function confirmImport(input: ConfirmImportInput) {
+  return confirmer().confirm(input);
+}
+
+export function getConfirmedLabSession(importSessionId: number) {
+  return confirmations().getConfirmed(importSessionId);
+}
+
 function profiles() {
   if (!profileRepository) {
     profileRepository = createSqliteProfileRepository(getDatabase());
@@ -134,4 +155,20 @@ function recogniser() {
   }
 
   return recognitionService;
+}
+
+function confirmations() {
+  if (!confirmationRepository) {
+    confirmationRepository = createSqliteConfirmationRepository(getDatabase());
+  }
+
+  return confirmationRepository;
+}
+
+function confirmer() {
+  if (!confirmationService) {
+    confirmationService = createConfirmationService(confirmations());
+  }
+
+  return confirmationService;
 }

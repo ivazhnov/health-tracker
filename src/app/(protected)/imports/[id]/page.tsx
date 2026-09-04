@@ -1,24 +1,41 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ReviewForm } from "@/app/confirmation/review-form";
 import { formatSize, statusLabel } from "@/app/imports/import-list";
 import { retryRecognitionAction } from "@/app/recognition/actions";
-import { getImport, getRecognitionDraft } from "@/server/services";
+import type {
+  ConfirmedLabSession,
+  ConfirmedObservation,
+} from "@/server/confirmation";
+import {
+  getConfirmedLabSession,
+  getImport,
+  getRecognitionDraft,
+  listMetricDefinitions,
+} from "@/server/services";
 
 type ImportPageProps = {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ confirmed?: string }>;
 };
 
 export const dynamic = "force-dynamic";
 
-export default async function ImportPage({ params }: ImportPageProps) {
+export default async function ImportPage({
+  params,
+  searchParams,
+}: ImportPageProps) {
   const importId = Number((await params).id);
   const item = Number.isInteger(importId) ? getImport(importId) : null;
 
-  if (!item) {
-    notFound();
-  }
+  if (!item) notFound();
+
   const draft = getRecognitionDraft(item.id);
+  const confirmed = getConfirmedLabSession(item.id);
+  const metrics =
+    draft && item.status === "needs_review" ? listMetricDefinitions() : [];
   const retryAction = retryRecognitionAction.bind(null, item.id);
+  const justConfirmed = (await searchParams).confirmed === "1";
 
   return (
     <main className="form-page wide-page">
@@ -27,6 +44,10 @@ export default async function ImportPage({ params }: ImportPageProps) {
       </Link>
       <p className="eyebrow">Сессия #{item.id}</p>
       <h1 className="file-title">{item.originalFileName}</h1>
+
+      {justConfirmed ? (
+        <p className="notice success">Документ подтверждён и добавлен в историю.</p>
+      ) : null}
 
       <section className="document-layout">
         <div className="content-card document-details">
@@ -76,33 +97,31 @@ export default async function ImportPage({ params }: ImportPageProps) {
         </div>
 
         <div className="content-card next-stage-card">
-          <p className="status-label">Распознавание</p>
-          <h2>{draft ? "Черновик готов" : statusLabel(item.status)}</h2>
-          <p>{recognitionHint(item.status, Boolean(draft))}</p>
+          <p className="status-label">Документ</p>
+          <h2>
+            {confirmed
+              ? "Подтверждён"
+              : draft
+                ? "Готов к проверке"
+                : statusLabel(item.status)}
+          </h2>
+          <p>{documentHint(item.status, Boolean(draft), Boolean(confirmed))}</p>
         </div>
       </section>
 
-      {draft ? (
-        <>
-          <section className="content-card extraction-summary">
-            <div>
-              <span>Язык</span>
-              <strong>{languageLabel(draft.detectedLanguage)}</strong>
-            </div>
-            <div>
-              <span>Лаборатория</span>
-              <strong>{draft.laboratoryName || "Не определена"}</strong>
-            </div>
-            <div>
-              <span>Дата забора</span>
-              <strong>{draft.collectedAt || "Не определена"}</strong>
-            </div>
-            <div>
-              <span>Материал</span>
-              <strong>{draft.specimen || "Не определён"}</strong>
-            </div>
-          </section>
+      {confirmed && item.sourceDocumentId ? (
+        <section className="review-workspace">
+          <DocumentPreview
+            extractedText={draft?.extractedText ?? ""}
+            mediaType={item.mediaType}
+            sourceDocumentId={item.sourceDocumentId}
+          />
+          <ConfirmedView session={confirmed} />
+        </section>
+      ) : null}
 
+      {draft && item.status === "needs_review" && item.sourceDocumentId ? (
+        <>
           {draft.warnings.length ? (
             <section className="warning-list">
               {draft.warnings.map((warning) => (
@@ -110,49 +129,18 @@ export default async function ImportPage({ params }: ImportPageProps) {
               ))}
             </section>
           ) : null}
-
-          <section className="content-card draft-card">
-            <div className="recent-imports-heading">
-              <h2>Найденные показатели</h2>
-              <span>{draft.observations.length}</span>
-            </div>
-            {draft.observations.length ? (
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Показатель</th>
-                      <th>Значение</th>
-                      <th>Референс</th>
-                      <th>Уверенность</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {draft.observations.map((observation, index) => (
-                      <tr key={`${observation.sourceText}-${index}`}>
-                        <td>
-                          <strong>
-                            {observation.displayName || observation.originalName}
-                          </strong>
-                          <small>
-                            {observation.category || "Не сопоставлен с каталогом"}
-                          </small>
-                        </td>
-                        <td>
-                          {observation.valueText} {observation.unit}
-                        </td>
-                        <td>{referenceText(observation)}</td>
-                        <td>{Math.round(observation.confidence * 100)}%</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className="muted-copy">Автоматически найти показатели не удалось.</p>
-            )}
+          <section className="review-workspace">
+            <DocumentPreview
+              extractedText={draft.extractedText}
+              mediaType={item.mediaType}
+              sourceDocumentId={item.sourceDocumentId}
+            />
+            <ReviewForm
+              draft={draft}
+              importSessionId={item.id}
+              metrics={metrics}
+            />
           </section>
-
           <details className="content-card extracted-text">
             <summary>Извлечённый текст</summary>
             <pre>{draft.extractedText}</pre>
@@ -160,6 +148,99 @@ export default async function ImportPage({ params }: ImportPageProps) {
         </>
       ) : null}
     </main>
+  );
+}
+
+function DocumentPreview({
+  extractedText,
+  mediaType,
+  sourceDocumentId,
+}: {
+  extractedText: string;
+  mediaType: string;
+  sourceDocumentId: number;
+}) {
+  return (
+    <section className="content-card document-preview-card">
+      <div className="preview-heading">
+        <div>
+          <p className="status-label">Оригинал</p>
+          <h2>Документ</h2>
+        </div>
+        <a
+          href={`/api/documents/${sourceDocumentId}`}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Открыть отдельно
+        </a>
+      </div>
+      {mediaType === "text/plain" ? (
+        <pre className="text-document-preview">{extractedText}</pre>
+      ) : (
+        <object
+          className="document-preview"
+          data={`/api/documents/${sourceDocumentId}`}
+          type={mediaType}
+        >
+          <p>
+            Предпросмотр недоступен.{" "}
+            <a
+              href={`/api/documents/${sourceDocumentId}`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Откройте документ отдельно
+            </a>
+            .
+          </p>
+        </object>
+      )}
+    </section>
+  );
+}
+
+function ConfirmedView({ session }: { session: ConfirmedLabSession }) {
+  return (
+    <section className="content-card confirmed-card">
+      <p className="status-label">Сохранено</p>
+      <h2>Результаты анализа</h2>
+      <dl className="confirmed-metadata">
+        <Detail label="Дата забора" value={session.collectedAt} />
+        <Detail
+          label="Лаборатория"
+          value={session.laboratoryName || "Не указана"}
+        />
+        <Detail label="Материал" value={session.specimen || "Не указан"} />
+        <Detail
+          label="Подтверждено"
+          value={formatDateTime(session.confirmedAt)}
+        />
+      </dl>
+      {session.note ? <p className="session-note">{session.note}</p> : null}
+      <div className="confirmed-observations">
+        {session.observations.map((observation) => (
+          <ConfirmedRow key={observation.id} observation={observation} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ConfirmedRow({ observation }: { observation: ConfirmedObservation }) {
+  return (
+    <article>
+      <div>
+        <strong>{observation.displayName}</strong>
+        <small>{observation.category}</small>
+      </div>
+      <div>
+        <strong>
+          {observation.valueText} {observation.unit}
+        </strong>
+        <small>{referenceText(observation)}</small>
+      </div>
+    </article>
   );
 }
 
@@ -187,34 +268,23 @@ function formatDateTime(value: string) {
   }).format(new Date(value));
 }
 
-function recognitionHint(status: string, hasDraft: boolean) {
-  if (hasDraft) {
-    return "Проверьте найденные данные. На следующем этапе их можно будет исправить и подтвердить.";
-  }
+function documentHint(status: string, hasDraft: boolean, confirmed: boolean) {
+  if (confirmed) return "Проверенные результаты сохранены отдельно от черновика.";
+  if (hasDraft) return "Сверьте поля с оригиналом и подтвердите весь документ.";
   if (status === "extracting") return "Извлекаем текст и ищем показатели.";
   if (status === "failed") return "Исправьте источник проблемы и повторите попытку.";
   return "Документ готов к распознаванию.";
 }
 
-function languageLabel(language: string) {
-  const labels: Record<string, string> = {
-    ru: "Русский",
-    en: "Английский",
-    fr: "Французский",
-    de: "Немецкий",
-    it: "Итальянский",
-    unknown: "Не определён",
-  };
-  return labels[language] ?? language;
-}
-
 function referenceText(observation: {
-  referenceLow: string | null;
-  referenceHigh: string | null;
+  referenceLow: number | null;
+  referenceHigh: number | null;
   referenceText: string | null;
 }) {
-  if (observation.referenceLow && observation.referenceHigh) {
-    return `${observation.referenceLow}–${observation.referenceHigh}`;
+  if (observation.referenceLow !== null && observation.referenceHigh !== null) {
+    return `Референс ${observation.referenceLow}–${observation.referenceHigh}`;
   }
-  return observation.referenceText || "—";
+  if (observation.referenceLow !== null) return `От ${observation.referenceLow}`;
+  if (observation.referenceHigh !== null) return `До ${observation.referenceHigh}`;
+  return observation.referenceText || "Без референса";
 }
