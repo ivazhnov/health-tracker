@@ -355,4 +355,96 @@ export const migrations: Migration[] = [
       ON observations (metric_definition_id, lab_session_id);
     `,
   },
+  {
+    version: 6,
+    name: "deduplicated_sessions_and_sources",
+    sql: `
+      ALTER TABLE observations ADD COLUMN specimen TEXT;
+
+      UPDATE observations
+      SET specimen = (
+        SELECT specimen
+        FROM lab_sessions
+        WHERE lab_sessions.id = observations.lab_session_id
+      );
+
+      CREATE TABLE lab_session_documents (
+        lab_session_id INTEGER NOT NULL REFERENCES lab_sessions(id) ON DELETE CASCADE,
+        source_document_id INTEGER NOT NULL REFERENCES source_documents(id),
+        original_file_name TEXT NOT NULL,
+        laboratory_name TEXT,
+        specimen TEXT,
+        note TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (lab_session_id, source_document_id)
+      );
+
+      CREATE TABLE observation_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        observation_id INTEGER NOT NULL REFERENCES observations(id) ON DELETE CASCADE,
+        source_document_id INTEGER NOT NULL REFERENCES source_documents(id),
+        original_name TEXT NOT NULL,
+        value_text TEXT NOT NULL,
+        value_numeric REAL NOT NULL,
+        comparator TEXT CHECK (comparator IN ('<', '<=', '>', '>=')),
+        unit TEXT,
+        specimen TEXT,
+        reference_low REAL,
+        reference_high REAL,
+        reference_text TEXT,
+        source_text TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        UNIQUE (observation_id, source_document_id)
+      );
+
+      CREATE INDEX observation_sources_document
+      ON observation_sources (source_document_id, observation_id);
+
+      CREATE TABLE import_confirmation_results (
+        import_session_id INTEGER PRIMARY KEY REFERENCES import_sessions(id),
+        lab_session_id INTEGER NOT NULL REFERENCES lab_sessions(id),
+        outcome TEXT NOT NULL CHECK (outcome IN ('created', 'merged')),
+        added_observations INTEGER NOT NULL,
+        matched_observations INTEGER NOT NULL,
+        resolved_conflicts INTEGER NOT NULL,
+        created_at TEXT NOT NULL
+      );
+
+      CREATE INDEX import_confirmation_results_session
+      ON import_confirmation_results (lab_session_id, import_session_id);
+
+      INSERT INTO lab_session_documents (
+        lab_session_id, source_document_id, original_file_name,
+        laboratory_name, specimen, note, created_at
+      )
+      SELECT
+        l.id, l.source_document_id, i.original_file_name,
+        l.laboratory_name, l.specimen, l.note, l.created_at
+      FROM lab_sessions l
+      JOIN import_sessions i ON i.id = l.import_session_id;
+
+      INSERT INTO observation_sources (
+        observation_id, source_document_id, original_name, value_text,
+        value_numeric, comparator, unit, specimen, reference_low,
+        reference_high, reference_text, source_text, created_at
+      )
+      SELECT
+        o.id, l.source_document_id, o.original_name, o.value_text,
+        o.value_numeric, o.comparator, o.unit, l.specimen, o.reference_low,
+        o.reference_high, o.reference_text, o.source_text, o.created_at
+      FROM observations o
+      JOIN lab_sessions l ON l.id = o.lab_session_id;
+
+      INSERT INTO import_confirmation_results (
+        import_session_id, lab_session_id, outcome, added_observations,
+        matched_observations, resolved_conflicts, created_at
+      )
+      SELECT
+        l.import_session_id, l.id, 'created',
+        (SELECT COUNT(*) FROM observations o WHERE o.lab_session_id = l.id),
+        0, 0, COALESCE(i.confirmed_at, l.created_at)
+      FROM lab_sessions l
+      JOIN import_sessions i ON i.id = l.import_session_id;
+    `,
+  },
 ];

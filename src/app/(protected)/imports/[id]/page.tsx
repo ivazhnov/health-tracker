@@ -205,6 +205,7 @@ function ConfirmedView({ session }: { session: ConfirmedLabSession }) {
     <section className="content-card confirmed-card">
       <p className="status-label">Сохранено</p>
       <h2>Результаты анализа</h2>
+      <p className="deduplication-summary">{summaryText(session)}</p>
       <dl className="confirmed-metadata">
         <Detail label="Дата забора" value={session.collectedAt} />
         <Detail
@@ -223,6 +224,24 @@ function ConfirmedView({ session }: { session: ConfirmedLabSession }) {
           <ConfirmedRow key={observation.id} observation={observation} />
         ))}
       </div>
+      <div className="confirmed-sources">
+        <h3>Источники · {session.sources.length}</h3>
+        {session.sources.map((source) => (
+          <article key={source.sourceDocumentId}>
+            <a
+              href={`/api/documents/${source.sourceDocumentId}`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {source.originalFileName}
+            </a>
+            <small>
+              {[source.specimen, source.note].filter(Boolean).join(" · ") ||
+                "Без заметки"}
+            </small>
+          </article>
+        ))}
+      </div>
     </section>
   );
 }
@@ -238,10 +257,31 @@ function ConfirmedRow({ observation }: { observation: ConfirmedObservation }) {
         <strong>
           {observation.valueText} {observation.unit}
         </strong>
-        <small>{referenceText(observation)}</small>
+        <small>
+          {[referenceText(observation), observation.specimen]
+            .filter(Boolean)
+            .join(" · ")}
+        </small>
+        <small>Источников: {observation.sourceCount}</small>
       </div>
     </article>
   );
+}
+
+function summaryText(session: ConfirmedLabSession) {
+  const summary = session.summary;
+  if (summary.outcome === "created") {
+    return `Создан новый анализ. Показателей: ${summary.addedObservations}.`;
+  }
+
+  const parts = [
+    `совпадений: ${summary.matchedObservations}`,
+    `добавлено: ${summary.addedObservations}`,
+  ];
+  if (summary.resolvedConflicts) {
+    parts.push(`конфликтов разрешено: ${summary.resolvedConflicts}`);
+  }
+  return `Документ объединён с существующим анализом: ${parts.join(", ")}.`;
 }
 
 function Detail({

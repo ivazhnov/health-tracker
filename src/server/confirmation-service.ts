@@ -27,11 +27,19 @@ export function createConfirmationService(repository: ConfirmationRepository) {
           error: "Эту загрузку уже нельзя подтвердить. Обновите страницу.",
         };
       }
+      if (result.status === "conflicts") {
+        return {
+          ok: false,
+          error: "Выберите значение для каждого конфликта.",
+          conflicts: result.conflicts,
+        };
+      }
 
       return {
         ok: true,
         labSessionId: result.labSessionId,
         alreadyConfirmed: result.status === "already_confirmed",
+        summary: result.summary,
       };
     },
   };
@@ -68,6 +76,24 @@ export function validateConfirmation(
   }
 
   const metricIds = new Set(metrics.map(({ id }) => id));
+  const conflictResolutions = new Map<
+    number,
+    "existing" | "incoming"
+  >();
+  for (const resolution of input.conflictResolutions ?? []) {
+    const metricDefinitionId = Number(resolution.metricDefinitionId);
+    if (
+      !Number.isInteger(metricDefinitionId) ||
+      !metricIds.has(metricDefinitionId) ||
+      (resolution.choice !== "existing" && resolution.choice !== "incoming")
+    ) {
+      return invalid("Не удалось прочитать выбор для конфликта.");
+    }
+    if (conflictResolutions.has(metricDefinitionId)) {
+      return invalid("Для одного конфликта передано несколько решений.");
+    }
+    conflictResolutions.set(metricDefinitionId, resolution.choice);
+  }
   const usedMetricIds = new Set<number>();
   const observations: ValidatedObservation[] = [];
 
@@ -94,6 +120,7 @@ export function validateConfirmation(
       specimen,
       note,
       observations,
+      conflictResolutions,
     },
   };
 }

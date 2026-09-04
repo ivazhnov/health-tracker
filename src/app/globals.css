@@ -794,6 +794,7 @@ a {
 
 .review-form {
   display: grid;
+  min-width: 0;
   gap: 18px;
   margin-top: 30px;
 }
@@ -839,6 +840,63 @@ a {
   justify-self: start;
 }
 
+.conflict-section h2 {
+  margin: 0 0 8px;
+}
+
+.conflict-section > p:not(.status-label) {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.conflict-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.conflict-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e8b9b3;
+  border-radius: 12px;
+}
+
+.conflict-card legend {
+  padding: 0 6px;
+  font-weight: 800;
+}
+
+.conflict-card label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  background: #fff8f7;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.conflict-card label:has(input:checked) {
+  background: #edf5f0;
+  border-color: var(--accent);
+}
+
+.conflict-card label span,
+.confirmed-sources article {
+  display: grid;
+  gap: 3px;
+}
+
+.conflict-card small,
+.confirmed-sources small {
+  color: var(--muted);
+}
+
 .confirmation-bar {
   display: flex;
   align-items: center;
@@ -880,6 +938,15 @@ a {
   line-height: 1.5;
 }
 
+.deduplication-summary {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  color: #315845;
+  background: #edf5f0;
+  border-radius: 10px;
+  line-height: 1.45;
+}
+
 .confirmed-observations {
   display: grid;
 }
@@ -903,6 +970,29 @@ a {
 
 .confirmed-observations small {
   color: var(--muted);
+}
+
+.confirmed-sources {
+  display: grid;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.confirmed-sources h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.confirmed-sources article {
+  padding: 12px 14px;
+  background: #f7f9f8;
+  border-radius: 10px;
+}
+
+.confirmed-sources a {
+  color: var(--accent);
+  font-weight: 750;
+  text-decoration: none;
 }
 
 .draft-card td small {
@@ -982,7 +1072,7 @@ th {
   .document-layout,
   .extraction-summary,
   .review-workspace {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .wide-field {
@@ -996,6 +1086,11 @@ th {
   .confirmation-bar {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .conflict-card {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .confirmed-metadata div {

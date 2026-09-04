@@ -3,9 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSession } from "@/server/auth/session";
+import type { DeduplicationConflict } from "@/server/confirmation";
 import { confirmImport } from "@/server/services";
 
-export type ConfirmationActionState = { error: string | null };
+export type ConfirmationActionState = {
+  error: string | null;
+  conflicts: DeduplicationConflict[];
+};
 
 export async function confirmImportAction(
   importSessionId: number,
@@ -23,19 +27,32 @@ export async function confirmImportAction(
       specimen: text(formData, "specimen"),
       note: text(formData, "note"),
       observations: rows(formData),
+      conflictResolutions: conflictResolutions(formData),
     });
   } catch {
     return {
       error: "Не удалось подтвердить документ. Попробуйте ещё раз.",
+      conflicts: [],
     };
   }
 
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) {
+    return { error: result.error, conflicts: result.conflicts ?? [] };
+  }
 
   revalidatePath(`/imports/${importSessionId}`);
   revalidatePath("/imports");
   revalidatePath("/");
   redirect(`/imports/${importSessionId}?confirmed=1`);
+}
+
+function conflictResolutions(formData: FormData) {
+  return texts(formData, "conflictMetricDefinitionId").map(
+    (metricDefinitionId) => ({
+      metricDefinitionId,
+      choice: text(formData, `conflictChoice-${metricDefinitionId}`),
+    }),
+  );
 }
 
 function rows(formData: FormData) {

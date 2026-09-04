@@ -24,7 +24,15 @@ export type ConfirmImportInput = {
   specimen: string;
   note: string;
   observations: ConfirmationObservationInput[];
+  conflictResolutions?: ConflictResolutionInput[];
 };
+
+export type ConflictResolutionInput = {
+  metricDefinitionId: string;
+  choice: string;
+};
+
+export type ConflictChoice = "existing" | "incoming";
 
 export type ValidatedObservation = {
   metricDefinitionId: number;
@@ -46,20 +54,60 @@ export type ValidatedConfirmation = {
   specimen: string | null;
   note: string;
   observations: ValidatedObservation[];
+  conflictResolutions: Map<number, ConflictChoice>;
+};
+
+export type ConflictValue = {
+  valueText: string;
+  unit: string | null;
+};
+
+export type DeduplicationConflict = {
+  metricDefinitionId: number;
+  displayName: string;
+  existing: ConflictValue;
+  incoming: ConflictValue;
+};
+
+export type ConfirmationSummary = {
+  outcome: "created" | "merged";
+  addedObservations: number;
+  matchedObservations: number;
+  resolvedConflicts: number;
 };
 
 export type ConfirmationWriteResult =
-  | { status: "confirmed" | "already_confirmed"; labSessionId: number }
+  | {
+      status: "confirmed" | "already_confirmed";
+      labSessionId: number;
+      summary: ConfirmationSummary;
+    }
+  | { status: "conflicts"; conflicts: DeduplicationConflict[] }
   | { status: "not_reviewable" };
 
 export type ConfirmImportResult =
-  | { ok: true; labSessionId: number; alreadyConfirmed: boolean }
-  | { ok: false; error: string };
+  | {
+      ok: true;
+      labSessionId: number;
+      alreadyConfirmed: boolean;
+      summary: ConfirmationSummary;
+    }
+  | { ok: false; error: string; conflicts?: DeduplicationConflict[] };
 
 export type ConfirmedObservation = ValidatedObservation & {
   id: number;
   displayName: string;
   category: string;
+  specimen: string | null;
+  sourceCount: number;
+};
+
+export type ConfirmedSourceDocument = {
+  sourceDocumentId: number;
+  originalFileName: string;
+  laboratoryName: string | null;
+  specimen: string | null;
+  note: string;
 };
 
 export type ConfirmedLabSession = {
@@ -71,6 +119,8 @@ export type ConfirmedLabSession = {
   note: string;
   confirmedAt: string;
   observations: ConfirmedObservation[];
+  sources: ConfirmedSourceDocument[];
+  summary: ConfirmationSummary;
 };
 
 export interface ConfirmationRepository {

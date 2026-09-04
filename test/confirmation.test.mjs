@@ -113,7 +113,196 @@ test("database errors roll back the whole confirmation", () => {
   );
 });
 
-function createDatabase() {
+test("matching results merge into one session with multiple sources", () => {
+  const database = createDatabase();
+  const service = createConfirmationService(
+    createSqliteConfirmationRepository(database),
+  );
+  service.confirm(confirmationInput());
+  addImport(database, 2);
+  const duplicate = confirmationInput(2);
+  duplicate.laboratoryName = "  тестовая—лаборатория  ";
+
+  const result = service.confirm(duplicate);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.outcome, "merged");
+  assert.equal(result.summary.matchedObservations, 2);
+  assert.equal(count(database, "lab_sessions"), 1);
+  assert.equal(count(database, "observations"), 2);
+  assert.equal(count(database, "lab_session_documents"), 2);
+  assert.equal(count(database, "observation_sources"), 4);
+});
+
+test("a partial report adds only new observations", () => {
+  const database = createDatabase();
+  const service = createConfirmationService(
+    createSqliteConfirmationRepository(database),
+  );
+  const first = confirmationInput();
+  first.observations = [first.observations[0]];
+  service.confirm(first);
+  addImport(database, 2);
+  const update = confirmationInput(2);
+  update.observations = [
+    update.observations[0],
+    observation("13", "Глюкоза", "5,2", "ммоль/л", "3,9", "5,6"),
+  ];
+
+  const result = service.confirm(update);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.addedObservations, 1);
+  assert.equal(result.summary.matchedObservations, 1);
+  assert.equal(count(database, "lab_sessions"), 1);
+  assert.equal(count(database, "observations"), 2);
+  assert.equal(count(database, "observation_sources"), 3);
+});
+
+test("conflicts require a choice and preserve both source values", () => {
+  const database = createDatabase();
+  const repository = createSqliteConfirmationRepository(database);
+  const service = createConfirmationService(repository);
+  const first = confirmationInput();
+  first.observations = [first.observations[0]];
+  service.confirm(first);
+  addImport(database, 2);
+  const conflicting = confirmationInput(2);
+  conflicting.observations = [
+    observation("1", "Холестерин ЛПНП", "3,4", "ммоль/л", "0", "3"),
+  ];
+
+  const unresolved = service.confirm(conflicting);
+
+  assert.equal(unresolved.ok, false);
+  assert.equal(unresolved.conflicts.length, 1);
+  assert.equal(count(database, "lab_session_documents"), 1);
+  assert.equal(count(database, "observation_sources"), 1);
+  assert.equal(importStatus(database, 2), "needs_review");
+
+  conflicting.conflictResolutions = [
+    { metricDefinitionId: "1", choice: "existing" },
+  ];
+  const resolved = service.confirm(conflicting);
+
+  assert.equal(resolved.ok, true);
+  assert.equal(resolved.summary.resolvedConflicts, 1);
+  assert.equal(repository.getConfirmed(2).observations[0].valueNumeric, 3.1);
+  assert.deepEqual(
+    database
+      .prepare(`
+        SELECT value_numeric FROM observation_sources ORDER BY value_numeric
+      `)
+      .all()
+      .map(({ value_numeric }) => value_numeric),
+    [3.1, 3.4],
+  );
+});
+
+test("choosing the incoming conflict changes only the main value", () => {
+  const database = createDatabase();
+  const repository = createSqliteConfirmationRepository(database);
+  const service = createConfirmationService(repository);
+  const first = confirmationInput();
+  first.observations = [first.observations[0]];
+  service.confirm(first);
+  addImport(database, 2);
+  const conflicting = confirmationInput(2);
+  conflicting.observations = [
+    observation("1", "Холестерин ЛПНП", "3,4", "ммоль/л", "0", "3"),
+  ];
+  conflicting.conflictResolutions = [
+    { metricDefinitionId: "1", choice: "incoming" },
+  ];
+
+  service.confirm(conflicting);
+
+  assert.equal(repository.getConfirmed(2).observations[0].valueNumeric, 3.4);
+  assert.equal(count(database, "observation_sources"), 2);
+});
+
+test("reconfirming the same source does not duplicate source links", () => {
+  const database = createDatabase();
+  const service = createConfirmationService(
+    createSqliteConfirmationRepository(database),
+  );
+  service.confirm(confirmationInput());
+  addImport(database, 2, 1);
+
+  const result = service.confirm(confirmationInput(2));
+
+  assert.equal(result.ok, true);
+  assert.equal(count(database, "lab_sessions"), 1);
+  assert.equal(count(database, "lab_session_documents"), 1);
+  assert.equal(count(database, "observation_sources"), 2);
+  assert.equal(count(database, "import_confirmation_results"), 2);
+});
+
+test("the same metric in a different material stays in a separate session", () => {
+  const database = createDatabase();
+  const service = createConfirmationService(
+    createSqliteConfirmationRepository(database),
+  );
+  const first = confirmationInput();
+  first.observations = [first.observations[0]];
+  service.confirm(first);
+  addImport(database, 2);
+  const second = confirmationInput(2);
+  second.specimen = "Моча";
+  second.observations = [second.observations[0]];
+
+  const result = service.confirm(second);
+
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.outcome, "created");
+  assert.equal(count(database, "lab_sessions"), 2);
+});
+
+test("migration 6 backfills sources for stage 5 confirmations", () => {
+  const database = createDatabase(5);
+  const now = new Date().toISOString();
+  database
+    .prepare(`
+      INSERT INTO lab_sessions (
+        profile_id, import_session_id, source_document_id, collected_at,
+        laboratory_name, specimen, note, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(1, 1, 1, "2026-09-04", "Тестовая лаборатория", "Кровь", "", now, now);
+  database
+    .prepare(`
+      INSERT INTO observations (
+        lab_session_id, metric_definition_id, original_name, value_text,
+        value_numeric, comparator, unit, reference_low, reference_high,
+        reference_text, source_text, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(1, 1, "Холестерин ЛПНП", "3.1", 3.1, null, "ммоль/л", 0, 3, null, "", now);
+  database
+    .prepare(`
+      UPDATE import_sessions
+      SET status = 'confirmed', confirmed_at = ?, updated_at = ?
+      WHERE id = 1
+    `)
+    .run(now, now);
+
+  database.exec(migrations.find(({ version }) => version === 6).sql);
+
+  assert.equal(count(database, "lab_session_documents"), 1);
+  assert.equal(count(database, "observation_sources"), 1);
+  assert.equal(count(database, "import_confirmation_results"), 1);
+  assert.equal(
+    database.prepare("SELECT specimen FROM observations WHERE id = 1").get()
+      .specimen,
+    "Кровь",
+  );
+  assert.equal(
+    createSqliteConfirmationRepository(database).getConfirmed(1).summary.outcome,
+    "created",
+  );
+});
+
+function createDatabase(maxMigrationVersion = Number.POSITIVE_INFINITY) {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON");
   database.exec(`
@@ -123,7 +312,9 @@ function createDatabase() {
       applied_at TEXT NOT NULL
     )
   `);
-  for (const migration of migrations) database.exec(migration.sql);
+  for (const migration of migrations) {
+    if (migration.version <= maxMigrationVersion) database.exec(migration.sql);
+  }
 
   const now = new Date().toISOString();
   database
@@ -152,9 +343,9 @@ function createDatabase() {
   return database;
 }
 
-function confirmationInput() {
+function confirmationInput(importSessionId = 1) {
   return {
-    importSessionId: 1,
+    importSessionId,
     collectedAt: "2026-09-04",
     laboratoryName: "Тестовая лаборатория",
     specimen: "Кровь",
@@ -164,6 +355,45 @@ function confirmationInput() {
       observation("5", "Креатинин", "90", "мкмоль/л", "60", "110"),
     ],
   };
+}
+
+function addImport(database, importSessionId, sourceDocumentId) {
+  const now = new Date().toISOString();
+  let documentId = sourceDocumentId;
+  if (!documentId) {
+    const hash = String(importSessionId).padStart(64, "0");
+    documentId = Number(
+      database
+        .prepare(`
+          INSERT INTO source_documents (
+            sha256, storage_path, media_type, size_bytes, created_at
+          ) VALUES (?, ?, ?, ?, ?)
+        `)
+        .run(hash, `documents/${hash}`, "text/plain", 100, now).lastInsertRowid,
+    );
+  }
+  const hash = database
+    .prepare("SELECT sha256 FROM source_documents WHERE id = ?")
+    .get(documentId).sha256;
+  database
+    .prepare(`
+      INSERT INTO import_sessions (
+        id, profile_id, source_document_id, original_file_name, media_type,
+        size_bytes, sha256, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `)
+    .run(
+      importSessionId,
+      1,
+      documentId,
+      `analysis-${importSessionId}.txt`,
+      "text/plain",
+      100,
+      hash,
+      "needs_review",
+      now,
+      now,
+    );
 }
 
 function observation(metricDefinitionId, originalName, valueText, unit, low, high) {
@@ -181,4 +411,10 @@ function observation(metricDefinitionId, originalName, valueText, unit, low, hig
 
 function count(database, table) {
   return database.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get().count;
+}
+
+function importStatus(database, importSessionId) {
+  return database
+    .prepare("SELECT status FROM import_sessions WHERE id = ?")
+    .get(importSessionId).status;
 }

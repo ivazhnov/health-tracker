@@ -26,7 +26,7 @@ type ReviewRow = {
   sourceText: string;
 };
 
-const INITIAL_STATE: ConfirmationActionState = { error: null };
+const INITIAL_STATE: ConfirmationActionState = { error: null, conflicts: [] };
 
 export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps) {
   const nextKey = useRef(draft.observations.length);
@@ -286,6 +286,54 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
 
       {state.error ? <p className="notice error">{state.error}</p> : null}
 
+      {state.conflicts.length ? (
+        <section className="content-card conflict-section">
+          <p className="status-label">Нужно выбрать</p>
+          <h2>Нашли разные значения</h2>
+          <p>
+            Выберите основное значение для каждого показателя. Оба источника
+            сохранятся.
+          </p>
+          <div className="conflict-list">
+            {state.conflicts.map((conflict) => (
+              <fieldset className="conflict-card" key={conflict.metricDefinitionId}>
+                <legend>{conflict.displayName}</legend>
+                <input
+                  name="conflictMetricDefinitionId"
+                  readOnly
+                  type="hidden"
+                  value={conflict.metricDefinitionId}
+                />
+                <label>
+                  <input
+                    name={`conflictChoice-${conflict.metricDefinitionId}`}
+                    required
+                    type="radio"
+                    value="existing"
+                  />
+                  <span>
+                    <small>Уже сохранено</small>
+                    <strong>{formatConflictValue(conflict.existing)}</strong>
+                  </span>
+                </label>
+                <label>
+                  <input
+                    name={`conflictChoice-${conflict.metricDefinitionId}`}
+                    required
+                    type="radio"
+                    value="incoming"
+                  />
+                  <span>
+                    <small>В этом документе</small>
+                    <strong>{formatConflictValue(conflict.incoming)}</strong>
+                  </span>
+                </label>
+              </fieldset>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
       <div className="confirmation-bar">
         <p>После подтверждения документ станет частью истории анализов.</p>
         <button className="primary-button" disabled={pending} type="submit">
@@ -294,4 +342,8 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
       </div>
     </form>
   );
+}
+
+function formatConflictValue(value: { valueText: string; unit: string | null }) {
+  return [value.valueText, value.unit].filter(Boolean).join(" ");
 }
