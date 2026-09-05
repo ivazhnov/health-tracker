@@ -62,6 +62,8 @@ type ObservationRow = {
   reference_text: string | null;
   source_text: string;
   source_count: number;
+  specimen_code: string;
+  source_specimen_text: string | null;
 };
 
 type ConfirmationResultRow = {
@@ -111,7 +113,7 @@ export function createSqliteConfirmationRepository(
       o.id, o.metric_definition_id, m.display_name, m.category,
       o.original_name, o.value_text, o.value_numeric, o.comparator,
       o.unit, o.specimen, o.reference_low, o.reference_high,
-      o.reference_text, o.source_text,
+      o.reference_text, o.source_text, o.specimen_code, o.source_specimen_text,
       (SELECT COUNT(DISTINCT source_document_id) FROM confirmed_observation_sources s WHERE s.observation_id = o.id)
         AS source_count
     FROM confirmed_observations o
@@ -129,14 +131,15 @@ export function createSqliteConfirmationRepository(
     INSERT INTO confirmed_observations (
       lab_session_id, metric_definition_id, original_name, value_text,
       value_numeric, comparator, unit, reference_low, reference_high,
-      reference_text, source_text, created_at, specimen
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      reference_text, source_text, created_at, specimen,
+      specimen_code, source_specimen_text
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const updateObservation = database.prepare(`
     UPDATE confirmed_observations
     SET original_name = ?, value_text = ?, value_numeric = ?, comparator = ?,
         unit = ?, reference_low = ?, reference_high = ?, reference_text = ?,
-        source_text = ?, specimen = ?
+        source_text = ?, specimen = ?, specimen_code = ?, source_specimen_text = ?
     WHERE id = ?
   `);
   const insertLabSessionDocument = database.prepare(`
@@ -149,8 +152,9 @@ export function createSqliteConfirmationRepository(
     INSERT OR IGNORE INTO confirmed_observation_sources (
       observation_id, source_document_id, original_name, value_text,
       value_numeric, comparator, unit, specimen, reference_low,
-      reference_high, reference_text, source_text, created_at, variant_index
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      reference_high, reference_text, source_text, created_at, variant_index,
+      specimen_code, source_specimen_text
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const completeImport = database.prepare(`
     UPDATE import_sessions
@@ -223,34 +227,48 @@ export function createSqliteConfirmationRepository(
           source_document_id: importRow.source_document_id,
         };
 
-        const candidate = findCandidate(
+        const candidates = findCandidates(
           readCandidates.all(
             importRow.profile_id,
             input.collectedAt,
           ) as CandidateRow[],
           input.laboratoryName,
-          input.specimen,
         );
-        const existing = candidate
-          ? (readExistingObservations.all(candidate.id) as ObservationRow[])
-          : [];
+        let candidate: CandidateRow | null = null;
+        let existing: ObservationRow[] = [];
+        for (const possibleCandidate of candidates) {
+          const candidateObservations = readExistingObservations.all(
+            possibleCandidate.id,
+          ) as ObservationRow[];
+          const byMetric = new Map(
+            candidateObservations.map((observation) => [
+              observation.metric_definition_id,
+              observation,
+            ]),
+          );
+          const hasDifferentMaterial = input.observations.some(
+            (observation) => {
+              const current = byMetric.get(observation.metricDefinitionId);
+              return (
+                current &&
+                normalizeDeduplicationText(current.specimen) !==
+                  normalizeDeduplicationText(observation.specimen)
+              );
+            },
+          );
+          if (!hasDifferentMaterial) {
+            candidate = possibleCandidate;
+            existing = candidateObservations;
+            break;
+          }
+        }
         const existingByMetric = new Map(
           existing.map((observation) => [
             observation.metric_definition_id,
             observation,
           ]),
         );
-        // One canonical Observation cannot represent the same metric in two materials.
-        // Keeping a separate session is safer than mixing, for example, blood and urine.
-        const hasDifferentMaterial = input.observations.some((observation) => {
-          const current = existingByMetric.get(observation.metricDefinitionId);
-          return (
-            current &&
-            normalizeDeduplicationText(current.specimen) !==
-              normalizeDeduplicationText(input.specimen)
-          );
-        });
-        const target = hasDifferentMaterial ? null : candidate;
+        const target = candidate;
 
         if (!target) {
           const labSessionId = createLabSession(
@@ -281,10 +299,7 @@ export function createSqliteConfirmationRepository(
           return { status: "confirmed", labSessionId, summary };
         }
 
-        const conflicts = findConflicts(
-          input.observations,
-          existingByMetric,
-        );
+        const conflicts = findConflicts(input.observations, existingByMetric);
         const unresolved = conflicts.filter(
           ({ metricDefinitionId }) =>
             !input.conflictResolutions.has(metricDefinitionId),
@@ -310,7 +325,6 @@ export function createSqliteConfirmationRepository(
             const observationId = addObservation(
               target.id,
               observation,
-              input.specimen,
               now,
               insertObservation,
             );
@@ -318,7 +332,6 @@ export function createSqliteConfirmationRepository(
               observationId,
               reviewableImport.source_document_id,
               observation,
-              input.specimen,
               now,
               insertObservationSource,
             );
@@ -330,7 +343,6 @@ export function createSqliteConfirmationRepository(
             current.id,
             reviewableImport.source_document_id,
             observation,
-            input.specimen,
             now,
             insertObservationSource,
           );
@@ -352,7 +364,9 @@ export function createSqliteConfirmationRepository(
               observation.referenceHigh,
               observation.referenceText,
               observation.sourceText,
-              input.specimen,
+              observation.specimen,
+              observation.specimenCode,
+              observation.sourceSpecimenText,
               current.id,
             );
           }
@@ -399,20 +413,15 @@ export function createSqliteConfirmationRepository(
   };
 }
 
-function findCandidate(
+function findCandidates(
   candidates: CandidateRow[],
   laboratoryName: string | null,
-  specimen: string | null,
 ) {
   const normalized = normalizeDeduplicationText(laboratoryName);
-  if (!normalized) return null;
-  return (
-    candidates.find(
-      (candidate) =>
-        normalizeDeduplicationText(candidate.laboratory_name) === normalized &&
-        normalizeDeduplicationText(candidate.specimen) ===
-          normalizeDeduplicationText(specimen),
-    ) ?? null
+  if (!normalized) return [];
+  return candidates.filter(
+    (candidate) =>
+      normalizeDeduplicationText(candidate.laboratory_name) === normalized,
   );
 }
 
@@ -440,7 +449,8 @@ function sameObservation(
 ) {
   return (
     existing.value_numeric === incoming.valueNumeric &&
-    (incoming.valueNumeric !== null || existing.value_text === incoming.valueText) &&
+    (incoming.valueNumeric !== null ||
+      existing.value_text === incoming.valueText) &&
     existing.comparator === incoming.comparator &&
     normalizeDeduplicationText(existing.unit) ===
       normalizeDeduplicationText(incoming.unit)
@@ -468,18 +478,11 @@ function createLabSession(
     now,
   );
   const labSessionId = Number(inserted.lastInsertRowid);
-  insertDocument(
-    labSessionId,
-    importRow,
-    input,
-    now,
-    insertDocumentStatement,
-  );
+  insertDocument(labSessionId, importRow, input, now, insertDocumentStatement);
   for (const observation of input.observations) {
     const observationId = addObservation(
       labSessionId,
       observation,
-      input.specimen,
       now,
       insertObservation,
     );
@@ -487,7 +490,6 @@ function createLabSession(
       observationId,
       importRow.source_document_id,
       observation,
-      input.specimen,
       now,
       insertSourceStatement,
     );
@@ -516,7 +518,6 @@ function insertDocument(
 function addObservation(
   labSessionId: number,
   observation: ValidatedObservation,
-  specimen: string | null,
   now: string,
   statement: ReturnType<DatabaseSync["prepare"]>,
 ) {
@@ -533,7 +534,9 @@ function addObservation(
     observation.referenceText,
     observation.sourceText,
     now,
-    specimen,
+    observation.specimen ?? null,
+    observation.specimenCode ?? "unknown",
+    observation.sourceSpecimenText ?? observation.specimen ?? null,
   );
   return Number(inserted.lastInsertRowid);
 }
@@ -542,11 +545,13 @@ function addObservationSource(
   observationId: number,
   sourceDocumentId: number,
   observation: ValidatedObservation,
-  specimen: string | null,
   now: string,
   statement: ReturnType<DatabaseSync["prepare"]>,
 ) {
-  for (const [index, variant] of [observation, ...(observation.documentAlternatives ?? [])].entries()) {
+  for (const [index, variant] of [
+    observation,
+    ...(observation.documentAlternatives ?? []),
+  ].entries()) {
     statement.run(
       observationId,
       sourceDocumentId,
@@ -555,13 +560,15 @@ function addObservationSource(
       variant.valueNumeric,
       variant.comparator,
       variant.unit,
-      specimen,
+      variant.specimen ?? null,
       variant.referenceLow,
       variant.referenceHigh,
       variant.referenceText,
       variant.sourceText,
       now,
       index,
+      variant.specimenCode ?? "unknown",
+      variant.sourceSpecimenText ?? variant.specimen ?? null,
     );
   }
 }
@@ -623,6 +630,8 @@ function mapObservation(row: ObservationRow): ConfirmedObservation {
     referenceHigh: row.reference_high,
     referenceText: row.reference_text,
     sourceText: row.source_text,
+    specimenCode: row.specimen_code,
+    sourceSpecimenText: row.source_specimen_text,
     sourceCount: row.source_count,
   };
 }

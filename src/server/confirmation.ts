@@ -16,6 +16,8 @@ export type ConfirmationObservationInput = {
   referenceHigh: string;
   referenceText: string;
   sourceText: string;
+  specimenCode: string;
+  sourceSpecimenText: string;
 };
 
 export type ConfirmImportInput = {
@@ -48,6 +50,9 @@ export type ValidatedObservation = {
   referenceHigh: number | null;
   referenceText: string | null;
   sourceText: string;
+  specimen: string | null;
+  specimenCode: string;
+  sourceSpecimenText: string | null;
 };
 
 export type ValidatedConfirmation = {
@@ -101,7 +106,6 @@ export type ConfirmedObservation = ValidatedObservation & {
   id: number;
   displayName: string;
   category: string;
-  specimen: string | null;
   sourceCount: number;
 };
 

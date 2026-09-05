@@ -36,7 +36,8 @@ test("invalid rows do not create partial confirmed data", () => {
   const repository = createSqliteConfirmationRepository(database);
   const service = createConfirmationService(repository);
   const input = confirmationInput();
-  input.observations[1].metricDefinitionId = input.observations[0].metricDefinitionId;
+  input.observations[1].metricDefinitionId =
+    input.observations[0].metricDefinitionId;
 
   const result = service.confirm(input);
 
@@ -190,9 +191,11 @@ test("conflicts require a choice and preserve both source values", () => {
   assert.equal(repository.getConfirmed(2).observations[0].valueNumeric, 3.1);
   assert.deepEqual(
     database
-      .prepare(`
+      .prepare(
+        `
         SELECT value_numeric FROM confirmed_observation_sources ORDER BY value_numeric
-      `)
+      `,
+      )
       .all()
       .map(({ value_numeric }) => value_numeric),
     [3.1, 3.4],
@@ -260,7 +263,9 @@ test("the same metric in a different material stays in a separate session", () =
 
 test("repeated reports select the session with the matching material", () => {
   const database = createDatabase();
-  const service = createConfirmationService(createSqliteConfirmationRepository(database));
+  const service = createConfirmationService(
+    createSqliteConfirmationRepository(database),
+  );
   const first = confirmationInput();
   assert.equal(service.confirm(first).ok, true);
   addImport(database, 2);
@@ -283,33 +288,52 @@ test("migration 6 backfills sources for stage 5 confirmations", () => {
   const database = createDatabase(5);
   const now = new Date().toISOString();
   database
-    .prepare(`
+    .prepare(
+      `
       INSERT INTO lab_sessions (
         profile_id, import_session_id, source_document_id, collected_at,
         laboratory_name, specimen, note, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
+    `,
+    )
     .run(1, 1, 1, "2026-09-04", "Тестовая лаборатория", "Кровь", "", now, now);
   database
-    .prepare(`
+    .prepare(
+      `
       INSERT INTO observations (
         lab_session_id, metric_definition_id, original_name, value_text,
         value_numeric, comparator, unit, reference_low, reference_high,
         reference_text, source_text, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-    .run(1, 1, "Холестерин ЛПНП", "3.1", 3.1, null, "ммоль/л", 0, 3, null, "", now);
+    `,
+    )
+    .run(
+      1,
+      1,
+      "Холестерин ЛПНП",
+      "3.1",
+      3.1,
+      null,
+      "ммоль/л",
+      0,
+      3,
+      null,
+      "",
+      now,
+    );
   database
-    .prepare(`
+    .prepare(
+      `
       UPDATE import_sessions
       SET status = 'confirmed', confirmed_at = ?, updated_at = ?
       WHERE id = 1
-    `)
+    `,
+    )
     .run(now, now);
 
-  database.exec(migrations.find(({ version }) => version === 6).sql);
-  database.exec(migrations.find(({ version }) => version === 7).sql);
-  database.exec(migrations.find(({ version }) => version === 8).sql);
+  for (const migration of migrations.filter(({ version }) => version >= 6)) {
+    database.exec(migration.sql);
+  }
 
   assert.equal(count(database, "lab_session_documents"), 1);
   assert.equal(count(database, "confirmed_observation_sources"), 1);
@@ -320,7 +344,8 @@ test("migration 6 backfills sources for stage 5 confirmations", () => {
     "Кровь",
   );
   assert.equal(
-    createSqliteConfirmationRepository(database).getConfirmed(1).summary.outcome,
+    createSqliteConfirmationRepository(database).getConfirmed(1).summary
+      .outcome,
     "created",
   );
 });
@@ -331,13 +356,17 @@ test("document duplicates require an explicit valid choice and retain all varian
     const repository = createSqliteConfirmationRepository(database);
     const service = createConfirmationService(repository);
     const input = confirmationInput();
-    input.observations.push(observation("1", "LDL repeat", "3.2", "ммоль/л", "1", "4"));
+    input.observations.push(
+      observation("1", "LDL repeat", "3.2", "ммоль/л", "1", "4"),
+    );
     for (const rowIndex of ["", "1", "-1", "999", "0.5"]) {
       input.duplicateResolutions = [{ metricDefinitionId: "1", rowIndex }];
       assert.equal(service.confirm(input).ok, false);
       assert.equal(count(database, "confirmed_observations"), 0);
     }
-    input.duplicateResolutions = [{ metricDefinitionId: "1", rowIndex: String(selected) }];
+    input.duplicateResolutions = [
+      { metricDefinitionId: "1", rowIndex: String(selected) },
+    ];
     assert.equal(service.confirm(input).ok, true);
     assert.equal(service.confirm(input).alreadyConfirmed, true);
     assert.equal(count(database, "confirmed_observations"), 2);
@@ -345,12 +374,19 @@ test("document duplicates require an explicit valid choice and retain all varian
     const saved = repository.getConfirmed(1).observations[0];
     assert.equal(saved.valueNumeric, selected === 0 ? 3.1 : 3.2);
     assert.equal(saved.sourceCount, 1);
-    assert.deepEqual(database.prepare(`SELECT value_numeric, reference_low, reference_high
-      FROM confirmed_observation_sources WHERE observation_id = ? ORDER BY value_numeric`).all(saved.id)
-      .map((row) => ({ ...row })), [
-      { value_numeric: 3.1, reference_low: 0, reference_high: 3 },
-      { value_numeric: 3.2, reference_low: 1, reference_high: 4 },
-    ]);
+    assert.deepEqual(
+      database
+        .prepare(
+          `SELECT value_numeric, reference_low, reference_high
+      FROM confirmed_observation_sources WHERE observation_id = ? ORDER BY value_numeric`,
+        )
+        .all(saved.id)
+        .map((row) => ({ ...row })),
+      [
+        { value_numeric: 3.1, reference_low: 0, reference_high: 3 },
+        { value_numeric: 3.2, reference_low: 1, reference_high: 4 },
+      ],
+    );
     database.close();
   }
 });
@@ -360,29 +396,45 @@ test("text results remain text and differing text requires conflict resolution",
   const repository = createSqliteConfirmationRepository(database);
   const service = createConfirmationService(repository);
   const input = confirmationInput();
-  input.observations = [{ ...input.observations[0], valueKind: "text", valueText: "Отрицательно" }];
+  input.observations = [
+    { ...input.observations[0], valueKind: "text", valueText: "Отрицательно" },
+  ];
   assert.equal(service.confirm(input).ok, true);
   const saved = repository.getConfirmed(1).observations[0];
   assert.equal(saved.valueNumeric, null);
   assert.equal(saved.valueText, "Отрицательно");
   assert.equal(saved.comparator, null);
   addImport(database, 2);
-  assert.equal(service.confirm({ ...input, importSessionId: 2 }).summary.matchedObservations, 1);
+  assert.equal(
+    service.confirm({ ...input, importSessionId: 2 }).summary
+      .matchedObservations,
+    1,
+  );
   addImport(database, 3);
-  const changed = { ...input, importSessionId: 3,
-    observations: [{ ...input.observations[0], valueText: "Положительно" }] };
+  const changed = {
+    ...input,
+    importSessionId: 3,
+    observations: [{ ...input.observations[0], valueText: "Положительно" }],
+  };
   assert.equal(service.confirm(changed).conflicts.length, 1);
   assert.equal(importStatus(database, 3), "needs_review");
-  changed.conflictResolutions = [{ metricDefinitionId: "1", choice: "incoming" }];
+  changed.conflictResolutions = [
+    { metricDefinitionId: "1", choice: "incoming" },
+  ];
   assert.equal(service.confirm(changed).ok, true);
-  assert.equal(repository.getConfirmed(3).observations[0].valueText, "Положительно");
+  assert.equal(
+    repository.getConfirmed(3).observations[0].valueText,
+    "Положительно",
+  );
   assert.equal(count(database, "confirmed_observation_sources"), 3);
   database.close();
 });
 
 test("invalid numbers are not silently accepted as text", () => {
   const database = createDatabase();
-  const service = createConfirmationService(createSqliteConfirmationRepository(database));
+  const service = createConfirmationService(
+    createSqliteConfirmationRepository(database),
+  );
   const input = confirmationInput();
   for (const valueText of ["", "3..1", "abc", "Infinity", "9".repeat(400)]) {
     input.observations[0].valueText = valueText;
@@ -394,6 +446,54 @@ test("invalid numbers are not silently accepted as text", () => {
     assert.equal(service.confirm(input).ok, false);
   }
   assert.equal(count(database, "confirmed_observations"), 0);
+  database.close();
+});
+
+test("each result keeps canonical and source specimen independently", () => {
+  const database = createDatabase();
+  const repository = createSqliteConfirmationRepository(database);
+  const service = createConfirmationService(repository);
+  const input = confirmationInput();
+  input.specimen = "";
+  input.observations[0].specimenCode = "serum";
+  input.observations[0].sourceSpecimenText = "Serum (SST)";
+  input.observations[1].specimenCode = "urine";
+  input.observations[1].sourceSpecimenText = "Random urine";
+
+  assert.equal(service.confirm(input).ok, true);
+  assert.deepEqual(
+    repository
+      .getConfirmed(1)
+      .observations.map(({ specimen, specimenCode, sourceSpecimenText }) => ({
+        specimen,
+        specimenCode,
+        sourceSpecimenText,
+      })),
+    [
+      {
+        specimen: "Сыворотка",
+        specimenCode: "serum",
+        sourceSpecimenText: "Serum (SST)",
+      },
+      {
+        specimen: "Моча",
+        specimenCode: "urine",
+        sourceSpecimenText: "Random urine",
+      },
+    ],
+  );
+  assert.deepEqual(
+    database
+      .prepare(
+        "SELECT specimen_code, source_specimen_text FROM confirmed_observation_sources ORDER BY observation_id",
+      )
+      .all()
+      .map((row) => ({ ...row })),
+    [
+      { specimen_code: "serum", source_specimen_text: "Serum (SST)" },
+      { specimen_code: "urine", source_specimen_text: "Random urine" },
+    ],
+  );
   database.close();
 });
 
@@ -413,28 +513,50 @@ function createDatabase(maxMigrationVersion = Number.POSITIVE_INFINITY) {
 
   const now = new Date().toISOString();
   database
-    .prepare(`
+    .prepare(
+      `
       INSERT INTO profiles (
         first_name, last_name, date_of_birth, sex_at_birth, notes,
         created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `)
+    `,
+    )
     .run("Тест", "Профиль", "1990-01-01", "male", "", now, now);
   database
-    .prepare(`
+    .prepare(
+      `
       INSERT INTO source_documents (
         sha256, storage_path, media_type, size_bytes, created_at
       ) VALUES (?, ?, ?, ?, ?)
-    `)
-    .run("a".repeat(64), `documents/aa/${"a".repeat(64)}`, "text/plain", 100, now);
+    `,
+    )
+    .run(
+      "a".repeat(64),
+      `documents/aa/${"a".repeat(64)}`,
+      "text/plain",
+      100,
+      now,
+    );
   database
-    .prepare(`
+    .prepare(
+      `
       INSERT INTO import_sessions (
         profile_id, source_document_id, original_file_name, media_type,
         size_bytes, sha256, status, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
-    .run(1, 1, "analysis.txt", "text/plain", 100, "a".repeat(64), "needs_review", now, now);
+    `,
+    )
+    .run(
+      1,
+      1,
+      "analysis.txt",
+      "text/plain",
+      100,
+      "a".repeat(64),
+      "needs_review",
+      now,
+      now,
+    );
   return database;
 }
 
@@ -459,11 +581,13 @@ function addImport(database, importSessionId, sourceDocumentId) {
     const hash = String(importSessionId).padStart(64, "0");
     documentId = Number(
       database
-        .prepare(`
+        .prepare(
+          `
           INSERT INTO source_documents (
             sha256, storage_path, media_type, size_bytes, created_at
           ) VALUES (?, ?, ?, ?, ?)
-        `)
+        `,
+        )
         .run(hash, `documents/${hash}`, "text/plain", 100, now).lastInsertRowid,
     );
   }
@@ -471,12 +595,14 @@ function addImport(database, importSessionId, sourceDocumentId) {
     .prepare("SELECT sha256 FROM source_documents WHERE id = ?")
     .get(documentId).sha256;
   database
-    .prepare(`
+    .prepare(
+      `
       INSERT INTO import_sessions (
         id, profile_id, source_document_id, original_file_name, media_type,
         size_bytes, sha256, status, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `)
+    `,
+    )
     .run(
       importSessionId,
       1,
@@ -491,7 +617,14 @@ function addImport(database, importSessionId, sourceDocumentId) {
     );
 }
 
-function observation(metricDefinitionId, originalName, valueText, unit, low, high) {
+function observation(
+  metricDefinitionId,
+  originalName,
+  valueText,
+  unit,
+  low,
+  high,
+) {
   return {
     metricDefinitionId,
     originalName,

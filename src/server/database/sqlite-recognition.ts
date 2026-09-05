@@ -47,6 +47,8 @@ type DraftRow = {
   reference_text: string | null;
   confidence: number;
   source_text: string;
+  specimen_code: string;
+  source_specimen_text: string | null;
 };
 
 export function createSqliteRecognitionRepository(
@@ -106,8 +108,8 @@ export function createSqliteRecognitionRepository(
     INSERT INTO observation_drafts (
       import_session_id, metric_definition_id, original_name, value_text,
       unit, reference_low, reference_high, reference_text, confidence,
-      source_text, sort_order, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      source_text, sort_order, created_at, specimen_code, source_specimen_text
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const completeImport = database.prepare(`
     UPDATE import_sessions
@@ -138,7 +140,8 @@ export function createSqliteRecognitionRepository(
       d.reference_high,
       d.reference_text,
       d.confidence,
-      d.source_text
+      d.source_text,
+      d.specimen_code, d.source_specimen_text
     FROM observation_drafts d
     LEFT JOIN metric_definitions m ON m.id = d.metric_definition_id
     WHERE d.import_session_id = ?
@@ -179,16 +182,35 @@ export function createSqliteRecognitionRepository(
         draft.observations.forEach((item, index) => {
           let metricId = item.metricDefinitionId;
           // Catalogue proposals are labels only; no medical result is confirmed here.
-          if (metricId === null && draft.recognitionVersion.startsWith("openai-") && item.displayName && item.category) {
-            const key = "ai_" + createHash("sha256").update(
-              item.displayName.normalize("NFKC").trim().toLocaleLowerCase(),
-            ).digest("hex");
-            database.prepare(`INSERT OR IGNORE INTO metric_definitions
-              (key, display_name, category, default_unit) VALUES (?, ?, ?, ?)`)
+          if (
+            metricId === null &&
+            draft.recognitionVersion.startsWith("openai-") &&
+            item.displayName &&
+            item.category
+          ) {
+            const key =
+              "ai_" +
+              createHash("sha256")
+                .update(
+                  item.displayName.normalize("NFKC").trim().toLocaleLowerCase(),
+                )
+                .digest("hex");
+            database
+              .prepare(
+                `INSERT OR IGNORE INTO metric_definitions
+              (key, display_name, category, default_unit) VALUES (?, ?, ?, ?)`,
+              )
               .run(key, item.displayName, item.category, item.unit);
-            metricId = (database.prepare("SELECT id FROM metric_definitions WHERE key = ?").get(key) as { id: number }).id;
-            database.prepare(`INSERT OR IGNORE INTO metric_aliases
-              (metric_definition_id, language, alias) VALUES (?, 'ru', ?)`)
+            metricId = (
+              database
+                .prepare("SELECT id FROM metric_definitions WHERE key = ?")
+                .get(key) as { id: number }
+            ).id;
+            database
+              .prepare(
+                `INSERT OR IGNORE INTO metric_aliases
+              (metric_definition_id, language, alias) VALUES (?, 'ru', ?)`,
+              )
               .run(metricId, item.displayName);
           }
           insertDraft.run(
@@ -200,10 +222,14 @@ export function createSqliteRecognitionRepository(
             item.referenceLow,
             item.referenceHigh,
             item.referenceText,
-            item.metricDefinitionId === null ? Math.min(item.confidence, 0.8) : item.confidence,
+            item.metricDefinitionId === null
+              ? Math.min(item.confidence, 0.8)
+              : item.confidence,
             item.sourceText,
             index,
             now,
+            item.specimenCode,
+            item.sourceSpecimenText,
           );
         });
         completeImport.run(now, importSessionId);
@@ -277,6 +303,8 @@ function mapDraft(row: DraftRow): ObservationDraft {
     referenceText: row.reference_text,
     confidence: row.confidence,
     sourceText: row.source_text,
+    specimenCode: row.specimen_code,
+    sourceSpecimenText: row.source_specimen_text,
   };
 }
 

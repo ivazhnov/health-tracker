@@ -569,6 +569,51 @@ export const migrations: Migration[] = [
       ADD COLUMN laboratory_name_override TEXT;
     `,
   },
+  {
+    version: 12,
+    name: "per_observation_specimens",
+    sql: `
+      CREATE TABLE specimen_types (
+        code TEXT PRIMARY KEY,
+        display_name TEXT NOT NULL,
+        sort_order INTEGER NOT NULL UNIQUE
+      );
+
+      INSERT INTO specimen_types (code, display_name, sort_order) VALUES
+        ('venous_whole_blood', 'Венозная кровь', 10),
+        ('capillary_whole_blood', 'Капиллярная кровь', 20),
+        ('serum', 'Сыворотка', 30),
+        ('plasma', 'Плазма', 40),
+        ('urine', 'Моча', 50),
+        ('stool', 'Кал', 60),
+        ('saliva', 'Слюна', 70),
+        ('swab', 'Мазок', 80),
+        ('sputum', 'Мокрота', 90),
+        ('semen', 'Эякулят', 100),
+        ('csf', 'Спинномозговая жидкость', 110),
+        ('hair', 'Волосы', 120),
+        ('nails', 'Ногти', 130),
+        ('other', 'Другое', 140),
+        ('unknown', 'Не определён', 150);
+
+      ALTER TABLE observation_drafts ADD COLUMN specimen_code TEXT NOT NULL DEFAULT 'unknown';
+      ALTER TABLE observation_drafts ADD COLUMN source_specimen_text TEXT;
+      ALTER TABLE confirmed_observations ADD COLUMN specimen_code TEXT NOT NULL DEFAULT 'unknown';
+      ALTER TABLE confirmed_observations ADD COLUMN source_specimen_text TEXT;
+      ALTER TABLE confirmed_observation_sources ADD COLUMN specimen_code TEXT NOT NULL DEFAULT 'unknown';
+      ALTER TABLE confirmed_observation_sources ADD COLUMN source_specimen_text TEXT;
+
+      UPDATE observation_drafts
+      SET source_specimen_text = (
+        SELECT specimen FROM import_extractions
+        WHERE import_extractions.import_session_id = observation_drafts.import_session_id
+      );
+      UPDATE confirmed_observations
+      SET source_specimen_text = specimen;
+      UPDATE confirmed_observation_sources
+      SET source_specimen_text = specimen;
+    `,
+  },
 ];
 
 export function applyMigrations(database: DatabaseSync) {

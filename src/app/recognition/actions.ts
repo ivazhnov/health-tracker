@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { requireSession } from "@/server/auth/session";
 import { getImport, recogniseImport } from "@/server/services";
 
-export async function retryRecognitionAction(importSessionId: number) {
+export async function retryRecognitionAction(importSessionId: number, returnTo = "") {
   await requireSession();
   const item = getImport(importSessionId);
 
@@ -16,5 +16,5 @@ export async function retryRecognitionAction(importSessionId: number) {
   await recogniseImport(importSessionId);
   revalidatePath(`/imports/${importSessionId}`);
   revalidatePath("/imports");
-  redirect(`/imports/${importSessionId}`);
+  redirect(returnTo.startsWith("/people/") ? returnTo : `/imports/${importSessionId}`);
 }

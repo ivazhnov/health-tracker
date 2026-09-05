@@ -38,6 +38,8 @@ test("extracts basic document metadata without confirming it", () => {
 
   assert.equal(result.laboratoryName, "Лаборатория Тест");
   assert.equal(result.specimen, "Моча");
+  assert.equal(result.observations[0].specimenCode, "urine");
+  assert.equal(result.observations[0].sourceSpecimenText, "Моча");
   assert.equal(result.collectedAt, "2026-09-04");
 });
 

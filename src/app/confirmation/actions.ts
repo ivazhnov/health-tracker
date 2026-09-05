@@ -28,10 +28,12 @@ export async function confirmImportAction(
       note: text(formData, "note"),
       observations: rows(formData),
       conflictResolutions: conflictResolutions(formData),
-      duplicateResolutions: texts(formData, "duplicateMetricDefinitionId").map((metricDefinitionId) => ({
-        metricDefinitionId,
-        rowIndex: text(formData, `duplicateChoice-${metricDefinitionId}`),
-      })),
+      duplicateResolutions: texts(formData, "duplicateMetricDefinitionId").map(
+        (metricDefinitionId) => ({
+          metricDefinitionId,
+          rowIndex: text(formData, `duplicateChoice-${metricDefinitionId}`),
+        }),
+      ),
     });
   } catch {
     return {
@@ -48,7 +50,11 @@ export async function confirmImportAction(
   revalidatePath("/imports");
   revalidatePath("/");
   const returnTo = text(formData, "returnTo");
-  redirect(returnTo.startsWith("/people/") ? `${returnTo}?confirmed=1` : `/imports/${importSessionId}?confirmed=1`);
+  redirect(
+    returnTo.startsWith("/people/")
+      ? `${returnTo}?confirmed=1`
+      : `/imports/${importSessionId}?confirmed=1`,
+  );
 }
 
 function conflictResolutions(formData: FormData) {
@@ -70,6 +76,8 @@ function rows(formData: FormData) {
   const referenceHighs = texts(formData, "referenceHigh");
   const referenceTexts = texts(formData, "referenceText");
   const sourceTexts = texts(formData, "sourceText");
+  const specimenCodes = texts(formData, "specimenCode");
+  const sourceSpecimenTexts = texts(formData, "sourceSpecimenText");
 
   return metricIds.map((metricDefinitionId, index) => ({
     metricDefinitionId,
@@ -81,6 +89,8 @@ function rows(formData: FormData) {
     referenceHigh: referenceHighs[index] ?? "",
     referenceText: referenceTexts[index] ?? "",
     sourceText: sourceTexts[index] ?? "",
+    specimenCode: specimenCodes[index] ?? "unknown",
+    sourceSpecimenText: sourceSpecimenTexts[index] ?? "",
   }));
 }
 

@@ -4,6 +4,7 @@ import type {
   ObservationDraft,
   RecognitionDraft,
 } from "@/server/recognition";
+import { recognizeSpecimen, specimenLabel } from "../domain/specimens.ts";
 
 const RECOGNITION_VERSION = "local-1";
 
@@ -24,10 +25,13 @@ export function extractDraft(
   text: string,
   aliases: MetricAlias[],
 ): RecognitionDraft {
-  const sortedAliases = [...aliases].sort((a, b) => b.alias.length - a.alias.length);
+  const sortedAliases = [...aliases].sort(
+    (a, b) => b.alias.length - a.alias.length,
+  );
   const observations: ObservationDraft[] = [];
   const languageCounts = new Map<string, number>();
   const warnings: string[] = [];
+  const documentSpecimen = findSpecimen(text);
 
   for (const sourceText of text.split(/\r?\n/)) {
     const line = sourceText.replace(/\s+/g, " ").trim();
@@ -41,7 +45,7 @@ export function extractDraft(
     if (matchedAlias) {
       const parsed = parseKnownLine(line, normalizedLine, matchedAlias);
       if (parsed) {
-        observations.push(parsed);
+        observations.push(withSpecimen(parsed, documentSpecimen));
         languageCounts.set(
           matchedAlias.language,
           (languageCounts.get(matchedAlias.language) ?? 0) + 1,
@@ -51,7 +55,7 @@ export function extractDraft(
     }
 
     const unknown = parseUnknownLine(line);
-    if (unknown) observations.push(unknown);
+    if (unknown) observations.push(withSpecimen(unknown, documentSpecimen));
   }
 
   if (observations.length === 0) {
@@ -72,9 +76,20 @@ export function extractDraft(
     detectedLanguage: mostFrequentLanguage(languageCounts),
     laboratoryName: findLaboratory(text),
     collectedAt: findDate(text),
-    specimen: findSpecimen(text),
+    specimen: documentSpecimen,
     warnings,
     observations,
+  };
+}
+
+function withSpecimen(
+  observation: ObservationDraft,
+  sourceSpecimenText: string | null,
+) {
+  return {
+    ...observation,
+    specimenCode: recognizeSpecimen(sourceSpecimenText),
+    sourceSpecimenText,
   };
 }
 
@@ -97,7 +112,10 @@ function parseKnownLine(
 
   return {
     metricDefinitionId: alias.metricDefinitionId,
-    originalName: sourceText.slice(0, Math.max(0, sourceText.search(/[<>≤≥]?\s*\d/))).trim() || alias.alias,
+    originalName:
+      sourceText
+        .slice(0, Math.max(0, sourceText.search(/[<>≤≥]?\s*\d/)))
+        .trim() || alias.alias,
     displayName: alias.displayName,
     category: alias.category,
     valueText,
@@ -105,6 +123,8 @@ function parseKnownLine(
     ...reference,
     confidence,
     sourceText,
+    specimenCode: "unknown",
+    sourceSpecimenText: null,
   } satisfies ObservationDraft;
 }
 
@@ -117,7 +137,10 @@ function parseUnknownLine(sourceText: string) {
   const value = values.at(-1);
   if (!value || value.index === undefined) return null;
 
-  const originalName = beforeUnit.slice(0, value.index).replace(/[:;=\s]+$/u, "").trim();
+  const originalName = beforeUnit
+    .slice(0, value.index)
+    .replace(/[:;=\s]+$/u, "")
+    .trim();
   if (originalName.length < 2 || originalName.length > 100) return null;
 
   const afterValue = sourceText.slice(value.index + value[0].length);
@@ -131,6 +154,8 @@ function parseUnknownLine(sourceText: string) {
     ...parseReference(afterValue),
     confidence: 0.5,
     sourceText,
+    specimenCode: "unknown",
+    sourceSpecimenText: null,
   } satisfies ObservationDraft;
 }
 
@@ -153,7 +178,11 @@ function parseReference(value: string) {
 }
 
 function normalize(value: string) {
-  return value.normalize("NFKC").toLocaleLowerCase().replace(/\s+/g, " ").trim();
+  return value
+    .normalize("NFKC")
+    .toLocaleLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function containsAlias(line: string, alias: string) {
@@ -195,7 +224,11 @@ function findDate(text: string) {
 
   const european = text.match(/\b(\d{1,2})[./-](\d{1,2})[./-](20\d{2})\b/);
   if (european) {
-    return validDate(Number(european[3]), Number(european[2]), Number(european[1]));
+    return validDate(
+      Number(european[3]),
+      Number(european[2]),
+      Number(european[1]),
+    );
   }
   return null;
 }
@@ -208,9 +241,7 @@ function validDate(year: number, month: number, day: number) {
 
 function findSpecimen(text: string) {
   const normalized = normalize(text);
-  if (/(?:моча|urine|urin\b|urina)/u.test(normalized)) return "Моча";
-  if (/(?:сыворот|serum|sérum|siero)/u.test(normalized)) return "Сыворотка";
-  if (/(?:плазм|plasma)/u.test(normalized)) return "Плазма";
-  if (/(?:кров|blood|blut|sangue|sang\b)/u.test(normalized)) return "Кровь";
+  const code = recognizeSpecimen(normalized);
+  if (code !== "unknown" && code !== "other") return specimenLabel(code);
   return null;
 }

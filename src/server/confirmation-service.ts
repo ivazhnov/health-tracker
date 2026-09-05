@@ -7,6 +7,11 @@ import type {
   ValidatedConfirmation,
   ValidatedObservation,
 } from "@/server/confirmation";
+import {
+  isSpecimenCode,
+  recognizeSpecimen,
+  specimenLabel,
+} from "../domain/specimens.ts";
 
 const NUMBER = /^-?\d+(?:[.,]\d+)?$/;
 const VALUE = /^([<>]=?|≤|≥)?\s*(-?\d+(?:[.,]\d+)?)$/;
@@ -60,10 +65,6 @@ export function validateConfirmation(
   if (laboratoryName === undefined) {
     return invalid("Название лаборатории не должно быть длиннее 200 символов.");
   }
-  const specimen = optionalText(input.specimen, 100);
-  if (specimen === undefined) {
-    return invalid("Название материала не должно быть длиннее 100 символов.");
-  }
   const note = input.note.trim();
   if (note.length > 2000) {
     return invalid("Заметка не должна быть длиннее 2000 символов.");
@@ -76,10 +77,7 @@ export function validateConfirmation(
   }
 
   const metricIds = new Set(metrics.map(({ id }) => id));
-  const conflictResolutions = new Map<
-    number,
-    "existing" | "incoming"
-  >();
+  const conflictResolutions = new Map<number, "existing" | "incoming">();
   for (const resolution of input.conflictResolutions ?? []) {
     const metricDefinitionId = Number(resolution.metricDefinitionId);
     if (
@@ -97,7 +95,15 @@ export function validateConfirmation(
   const parsed: ValidatedObservation[] = [];
 
   for (let index = 0; index < input.observations.length; index += 1) {
-    const result = validateObservation(input.observations[index], metricIds);
+    const row = input.observations[index];
+    const result = validateObservation(
+      {
+        ...row,
+        specimenCode: row.specimenCode || recognizeSpecimen(input.specimen),
+        sourceSpecimenText: row.sourceSpecimenText || input.specimen,
+      },
+      metricIds,
+    );
     if (!result.ok) {
       return invalid(`Строка ${index + 1}: ${result.error}`);
     }
@@ -108,9 +114,15 @@ export function validateConfirmation(
   for (const choice of input.duplicateResolutions ?? []) {
     const metricId = Number(choice.metricDefinitionId);
     const rowIndex = Number(choice.rowIndex);
-    if (!choice.rowIndex.trim() || !Number.isInteger(rowIndex) ||
-        parsed[rowIndex]?.metricDefinitionId !== metricId || choices.has(metricId)) {
-      return invalid("Выберите основную строку для каждого повтора в документе.");
+    if (
+      !choice.rowIndex.trim() ||
+      !Number.isInteger(rowIndex) ||
+      parsed[rowIndex]?.metricDefinitionId !== metricId ||
+      choices.has(metricId)
+    ) {
+      return invalid(
+        "Выберите основную строку для каждого повтора в документе.",
+      );
     }
     choices.set(metricId, rowIndex);
   }
@@ -123,11 +135,18 @@ export function validateConfirmation(
     }
     const selectedIndex = choices.get(metricId);
     if (selectedIndex === undefined) {
-      const name = metrics.find((metric) => metric.id === metricId)!.displayName;
-      return invalid(`«${name}» уже есть в нескольких строках. Выберите основную строку в разделе «Повторы в документе».`);
+      const name = metrics.find(
+        (metric) => metric.id === metricId,
+      )!.displayName;
+      return invalid(
+        `«${name}» уже есть в нескольких строках. Выберите основную строку в разделе «Повторы в документе».`,
+      );
     }
     const selected = parsed[selectedIndex];
-    observations.push({ ...selected, documentAlternatives: group.filter((row) => row !== selected) });
+    observations.push({
+      ...selected,
+      documentAlternatives: group.filter((row) => row !== selected),
+    });
   }
 
   return {
@@ -136,7 +155,7 @@ export function validateConfirmation(
       importSessionId: input.importSessionId,
       collectedAt: input.collectedAt,
       laboratoryName,
-      specimen,
+      specimen: summarizeSpecimens(observations),
       note,
       observations,
       conflictResolutions,
@@ -149,7 +168,10 @@ function validateObservation(
   metricIds: Set<number>,
 ): { ok: true; value: ValidatedObservation } | { ok: false; error: string } {
   const metricDefinitionId = Number(input.metricDefinitionId);
-  if (!Number.isInteger(metricDefinitionId) || !metricIds.has(metricDefinitionId)) {
+  if (
+    !Number.isInteger(metricDefinitionId) ||
+    !metricIds.has(metricDefinitionId)
+  ) {
     return invalid("выберите показатель из каталога.");
   }
 
@@ -168,7 +190,9 @@ function validateObservation(
   }
   const value = valueText.match(VALUE);
   if (!textResult && !value) {
-    return invalid("значение должно быть числом, можно со знаком <, ≤, > или ≥.");
+    return invalid(
+      "значение должно быть числом, можно со знаком <, ≤, > или ≥.",
+    );
   }
   const comparator = textResult ? null : normalizeComparator(value![1]);
   const numericText = textResult ? "" : value![2].replace(",", ".");
@@ -180,9 +204,11 @@ function validateObservation(
   const unit = optionalText(input.unit, 50);
   if (unit === undefined) return invalid("единица слишком длинная.");
   const referenceLow = optionalNumber(input.referenceLow);
-  if (referenceLow === undefined) return invalid("нижний референс должен быть числом.");
+  if (referenceLow === undefined)
+    return invalid("нижний референс должен быть числом.");
   const referenceHigh = optionalNumber(input.referenceHigh);
-  if (referenceHigh === undefined) return invalid("верхний референс должен быть числом.");
+  if (referenceHigh === undefined)
+    return invalid("верхний референс должен быть числом.");
   if (
     referenceLow !== null &&
     referenceHigh !== null &&
@@ -191,7 +217,13 @@ function validateObservation(
     return invalid("нижний референс не может быть больше верхнего.");
   }
   const referenceText = optionalText(input.referenceText, 200);
-  if (referenceText === undefined) return invalid("текст референса слишком длинный.");
+  if (referenceText === undefined)
+    return invalid("текст референса слишком длинный.");
+  if (!isSpecimenCode(input.specimenCode))
+    return invalid("выберите биоматериал из списка.");
+  const sourceSpecimenText = optionalText(input.sourceSpecimenText, 200);
+  if (sourceSpecimenText === undefined)
+    return invalid("исходное название биоматериала слишком длинное.");
 
   return {
     ok: true,
@@ -206,8 +238,25 @@ function validateObservation(
       referenceHigh,
       referenceText,
       sourceText: input.sourceText.slice(0, 2000),
+      specimen:
+        input.specimenCode === "unknown"
+          ? null
+          : specimenLabel(input.specimenCode),
+      specimenCode: input.specimenCode,
+      sourceSpecimenText,
     },
   };
+}
+
+function summarizeSpecimens(observations: ValidatedObservation[]) {
+  const labels = [
+    ...new Set(
+      observations
+        .map(({ specimen }) => specimen)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
+  return labels.length ? labels.join(", ") : null;
 }
 
 function optionalNumber(value: string) {

@@ -28,6 +28,8 @@ export type ObservationDraft = {
   referenceText: string | null;
   confidence: number;
   sourceText: string;
+  specimenCode: string;
+  sourceSpecimenText: string | null;
 };
 
 export type RecognitionDraft = {
@@ -58,5 +60,8 @@ export interface TextExtractor {
 }
 
 export interface DraftExtractor {
-  extract(text: string, aliases: MetricAlias[]): RecognitionDraft | Promise<RecognitionDraft>;
+  extract(
+    text: string,
+    aliases: MetricAlias[],
+  ): RecognitionDraft | Promise<RecognitionDraft>;
 }
