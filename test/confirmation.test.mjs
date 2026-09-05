@@ -18,7 +18,7 @@ test("confirmation is atomic and idempotent", () => {
   assert.equal(second.ok, true);
   assert.equal(second.alreadyConfirmed, true);
   assert.equal(count(database, "lab_sessions"), 1);
-  assert.equal(count(database, "observations"), 2);
+  assert.equal(count(database, "confirmed_observations"), 2);
   assert.equal(
     database.prepare("SELECT status FROM import_sessions WHERE id = 1").get()
       .status,
@@ -43,7 +43,7 @@ test("invalid rows do not create partial confirmed data", () => {
   assert.equal(result.ok, false);
   assert.match(result.error, /уже есть/);
   assert.equal(count(database, "lab_sessions"), 0);
-  assert.equal(count(database, "observations"), 0);
+  assert.equal(count(database, "confirmed_observations"), 0);
   assert.equal(
     database.prepare("SELECT status FROM import_sessions WHERE id = 1").get()
       .status,
@@ -105,7 +105,7 @@ test("database errors roll back the whole confirmation", () => {
 
   assert.throws(() => repository.confirm(input), /FOREIGN KEY/);
   assert.equal(count(database, "lab_sessions"), 0);
-  assert.equal(count(database, "observations"), 0);
+  assert.equal(count(database, "confirmed_observations"), 0);
   assert.equal(
     database.prepare("SELECT status FROM import_sessions WHERE id = 1").get()
       .status,
@@ -129,9 +129,9 @@ test("matching results merge into one session with multiple sources", () => {
   assert.equal(result.summary.outcome, "merged");
   assert.equal(result.summary.matchedObservations, 2);
   assert.equal(count(database, "lab_sessions"), 1);
-  assert.equal(count(database, "observations"), 2);
+  assert.equal(count(database, "confirmed_observations"), 2);
   assert.equal(count(database, "lab_session_documents"), 2);
-  assert.equal(count(database, "observation_sources"), 4);
+  assert.equal(count(database, "confirmed_observation_sources"), 4);
 });
 
 test("a partial report adds only new observations", () => {
@@ -155,8 +155,8 @@ test("a partial report adds only new observations", () => {
   assert.equal(result.summary.addedObservations, 1);
   assert.equal(result.summary.matchedObservations, 1);
   assert.equal(count(database, "lab_sessions"), 1);
-  assert.equal(count(database, "observations"), 2);
-  assert.equal(count(database, "observation_sources"), 3);
+  assert.equal(count(database, "confirmed_observations"), 2);
+  assert.equal(count(database, "confirmed_observation_sources"), 3);
 });
 
 test("conflicts require a choice and preserve both source values", () => {
@@ -177,7 +177,7 @@ test("conflicts require a choice and preserve both source values", () => {
   assert.equal(unresolved.ok, false);
   assert.equal(unresolved.conflicts.length, 1);
   assert.equal(count(database, "lab_session_documents"), 1);
-  assert.equal(count(database, "observation_sources"), 1);
+  assert.equal(count(database, "confirmed_observation_sources"), 1);
   assert.equal(importStatus(database, 2), "needs_review");
 
   conflicting.conflictResolutions = [
@@ -191,7 +191,7 @@ test("conflicts require a choice and preserve both source values", () => {
   assert.deepEqual(
     database
       .prepare(`
-        SELECT value_numeric FROM observation_sources ORDER BY value_numeric
+        SELECT value_numeric FROM confirmed_observation_sources ORDER BY value_numeric
       `)
       .all()
       .map(({ value_numeric }) => value_numeric),
@@ -218,7 +218,7 @@ test("choosing the incoming conflict changes only the main value", () => {
   service.confirm(conflicting);
 
   assert.equal(repository.getConfirmed(2).observations[0].valueNumeric, 3.4);
-  assert.equal(count(database, "observation_sources"), 2);
+  assert.equal(count(database, "confirmed_observation_sources"), 2);
 });
 
 test("reconfirming the same source does not duplicate source links", () => {
@@ -234,7 +234,7 @@ test("reconfirming the same source does not duplicate source links", () => {
   assert.equal(result.ok, true);
   assert.equal(count(database, "lab_sessions"), 1);
   assert.equal(count(database, "lab_session_documents"), 1);
-  assert.equal(count(database, "observation_sources"), 2);
+  assert.equal(count(database, "confirmed_observation_sources"), 2);
   assert.equal(count(database, "import_confirmation_results"), 2);
 });
 
@@ -275,8 +275,8 @@ test("repeated reports select the session with the matching material", () => {
   assert.equal(result.summary.outcome, "merged");
   assert.equal(result.labSessionId, 2);
   assert.equal(count(database, "lab_sessions"), 2);
-  assert.equal(count(database, "observations"), 4);
-  assert.equal(count(database, "observation_sources"), 6);
+  assert.equal(count(database, "confirmed_observations"), 4);
+  assert.equal(count(database, "confirmed_observation_sources"), 6);
 });
 
 test("migration 6 backfills sources for stage 5 confirmations", () => {
@@ -308,9 +308,11 @@ test("migration 6 backfills sources for stage 5 confirmations", () => {
     .run(now, now);
 
   database.exec(migrations.find(({ version }) => version === 6).sql);
+  database.exec(migrations.find(({ version }) => version === 7).sql);
+  database.exec(migrations.find(({ version }) => version === 8).sql);
 
   assert.equal(count(database, "lab_session_documents"), 1);
-  assert.equal(count(database, "observation_sources"), 1);
+  assert.equal(count(database, "confirmed_observation_sources"), 1);
   assert.equal(count(database, "import_confirmation_results"), 1);
   assert.equal(
     database.prepare("SELECT specimen FROM observations WHERE id = 1").get()
@@ -321,6 +323,78 @@ test("migration 6 backfills sources for stage 5 confirmations", () => {
     createSqliteConfirmationRepository(database).getConfirmed(1).summary.outcome,
     "created",
   );
+});
+
+test("document duplicates require an explicit valid choice and retain all variants", () => {
+  for (const selected of [0, 2]) {
+    const database = createDatabase();
+    const repository = createSqliteConfirmationRepository(database);
+    const service = createConfirmationService(repository);
+    const input = confirmationInput();
+    input.observations.push(observation("1", "LDL repeat", "3.2", "ммоль/л", "1", "4"));
+    for (const rowIndex of ["", "1", "-1", "999", "0.5"]) {
+      input.duplicateResolutions = [{ metricDefinitionId: "1", rowIndex }];
+      assert.equal(service.confirm(input).ok, false);
+      assert.equal(count(database, "confirmed_observations"), 0);
+    }
+    input.duplicateResolutions = [{ metricDefinitionId: "1", rowIndex: String(selected) }];
+    assert.equal(service.confirm(input).ok, true);
+    assert.equal(service.confirm(input).alreadyConfirmed, true);
+    assert.equal(count(database, "confirmed_observations"), 2);
+    assert.equal(count(database, "confirmed_observation_sources"), 3);
+    const saved = repository.getConfirmed(1).observations[0];
+    assert.equal(saved.valueNumeric, selected === 0 ? 3.1 : 3.2);
+    assert.equal(saved.sourceCount, 1);
+    assert.deepEqual(database.prepare(`SELECT value_numeric, reference_low, reference_high
+      FROM confirmed_observation_sources WHERE observation_id = ? ORDER BY value_numeric`).all(saved.id)
+      .map((row) => ({ ...row })), [
+      { value_numeric: 3.1, reference_low: 0, reference_high: 3 },
+      { value_numeric: 3.2, reference_low: 1, reference_high: 4 },
+    ]);
+    database.close();
+  }
+});
+
+test("text results remain text and differing text requires conflict resolution", () => {
+  const database = createDatabase();
+  const repository = createSqliteConfirmationRepository(database);
+  const service = createConfirmationService(repository);
+  const input = confirmationInput();
+  input.observations = [{ ...input.observations[0], valueKind: "text", valueText: "Отрицательно" }];
+  assert.equal(service.confirm(input).ok, true);
+  const saved = repository.getConfirmed(1).observations[0];
+  assert.equal(saved.valueNumeric, null);
+  assert.equal(saved.valueText, "Отрицательно");
+  assert.equal(saved.comparator, null);
+  addImport(database, 2);
+  assert.equal(service.confirm({ ...input, importSessionId: 2 }).summary.matchedObservations, 1);
+  addImport(database, 3);
+  const changed = { ...input, importSessionId: 3,
+    observations: [{ ...input.observations[0], valueText: "Положительно" }] };
+  assert.equal(service.confirm(changed).conflicts.length, 1);
+  assert.equal(importStatus(database, 3), "needs_review");
+  changed.conflictResolutions = [{ metricDefinitionId: "1", choice: "incoming" }];
+  assert.equal(service.confirm(changed).ok, true);
+  assert.equal(repository.getConfirmed(3).observations[0].valueText, "Положительно");
+  assert.equal(count(database, "confirmed_observation_sources"), 3);
+  database.close();
+});
+
+test("invalid numbers are not silently accepted as text", () => {
+  const database = createDatabase();
+  const service = createConfirmationService(createSqliteConfirmationRepository(database));
+  const input = confirmationInput();
+  for (const valueText of ["", "3..1", "abc", "Infinity", "9".repeat(400)]) {
+    input.observations[0].valueText = valueText;
+    assert.equal(service.confirm(input).ok, false);
+  }
+  input.observations[0].valueKind = "text";
+  for (const valueText of [" ", "a".repeat(201)]) {
+    input.observations[0].valueText = valueText;
+    assert.equal(service.confirm(input).ok, false);
+  }
+  assert.equal(count(database, "confirmed_observations"), 0);
+  database.close();
 });
 
 function createDatabase(maxMigrationVersion = Number.POSITIVE_INFINITY) {

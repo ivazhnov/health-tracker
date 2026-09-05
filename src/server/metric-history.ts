@@ -2,7 +2,7 @@ export type MetricPoint = {
   specimen: string | null;
   observationId: number;
   collectedAt: string;
-  valueNumeric: number;
+  valueNumeric: number | null;
   valueText: string;
   comparator: "<" | "<=" | ">" | ">=" | null;
   unit: string | null;

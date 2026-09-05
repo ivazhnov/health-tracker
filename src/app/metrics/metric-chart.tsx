@@ -11,6 +11,9 @@ export function MetricChart({
   points: MetricPoint[];
   compact?: boolean;
 }) {
+  if (points.some((point) => point.valueNumeric === null)) {
+    return <p className="muted-copy">Есть текстовые результаты — сравните их в истории. Числовой график не строится.</p>;
+  }
   const units = new Set(points.map((point) => point.unit));
   const materials = new Set(points.map((point) => point.specimen?.trim().toLocaleLowerCase() ?? ""));
   if (units.size > 1 || materials.size > 1) {

@@ -22,7 +22,7 @@ type ObservationRow = {
   observation_id: number;
   lab_session_id: number;
   collected_at: string;
-  value_numeric: number;
+  value_numeric: number | null;
   value_text: string;
   comparator: MetricPoint["comparator"];
   unit: string | null;
@@ -47,7 +47,7 @@ export function createSqliteMetricHistoryQueryRepository(
   const readStats = database.prepare(`
     SELECT
       (SELECT COUNT(*) FROM lab_sessions WHERE profile_id = ?) AS lab_sessions,
-      (SELECT COUNT(*) FROM observations o
+      (SELECT COUNT(*) FROM confirmed_observations o
         JOIN lab_sessions l ON l.id = o.lab_session_id
         WHERE l.profile_id = ?) AS observations,
       (SELECT COUNT(DISTINCT d.source_document_id)
@@ -61,7 +61,7 @@ export function createSqliteMetricHistoryQueryRepository(
       COUNT(o.id) AS observation_count,
       f.sort_order AS favorite_order
     FROM metric_definitions m
-    JOIN observations o ON o.metric_definition_id = m.id
+    JOIN confirmed_observations o ON o.metric_definition_id = m.id
     JOIN lab_sessions l ON l.id = o.lab_session_id AND l.profile_id = ?
     LEFT JOIN favorite_metrics f
       ON f.profile_id = l.profile_id AND f.metric_definition_id = m.id
@@ -74,7 +74,7 @@ export function createSqliteMetricHistoryQueryRepository(
     FROM metric_definitions
     WHERE id = ? AND EXISTS (
       SELECT 1
-      FROM observations o
+      FROM confirmed_observations o
       JOIN lab_sessions l ON l.id = o.lab_session_id
       WHERE o.metric_definition_id = metric_definitions.id AND l.profile_id = ?
     )
@@ -85,22 +85,22 @@ export function createSqliteMetricHistoryQueryRepository(
       o.value_numeric, o.value_text, o.comparator, o.unit,
       o.reference_low, o.reference_high, o.reference_text,
       l.laboratory_name, o.specimen, l.note
-    FROM observations o
+    FROM confirmed_observations o
     JOIN lab_sessions l ON l.id = o.lab_session_id
     WHERE l.profile_id = ? AND o.metric_definition_id = ?
     ORDER BY l.collected_at, o.id
   `);
   const readSources = database.prepare(`
-    SELECT
+    SELECT DISTINCT
       s.observation_id, s.source_document_id, d.original_file_name, d.note
-    FROM observation_sources s
-    JOIN observations o ON o.id = s.observation_id
+    FROM confirmed_observation_sources s
+    JOIN confirmed_observations o ON o.id = s.observation_id
     JOIN lab_sessions l ON l.id = o.lab_session_id
     JOIN lab_session_documents d
       ON d.lab_session_id = l.id
       AND d.source_document_id = s.source_document_id
     WHERE l.profile_id = ? AND o.metric_definition_id = ?
-    ORDER BY s.observation_id, s.id
+    ORDER BY s.observation_id, s.source_document_id
   `);
 
   return {
@@ -161,7 +161,7 @@ export function createSqliteFavoriteMetricCommandRepository(
 ): FavoriteMetricCommandRepository {
   const metricBelongsToProfile = database.prepare(`
     SELECT 1
-    FROM observations o
+    FROM confirmed_observations o
     JOIN lab_sessions l ON l.id = o.lab_session_id
     WHERE l.profile_id = ? AND o.metric_definition_id = ?
     LIMIT 1
@@ -237,7 +237,7 @@ function readAllMetricObservations(database: DatabaseSync, profileId: number) {
       o.value_numeric, o.value_text, o.comparator, o.unit,
       o.reference_low, o.reference_high, o.reference_text,
       l.laboratory_name, o.specimen, l.note
-    FROM observations o
+    FROM confirmed_observations o
     JOIN lab_sessions l ON l.id = o.lab_session_id
     WHERE l.profile_id = ?
     ORDER BY l.collected_at, o.id

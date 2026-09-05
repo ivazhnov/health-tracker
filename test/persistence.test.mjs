@@ -11,7 +11,6 @@ import { createSqliteImportRepository } from "../src/server/database/sqlite-impo
 import { createSqliteConfirmationRepository } from "../src/server/database/sqlite-confirmation.ts";
 import { createSqliteFavoriteMetricCommandRepository, createSqliteMetricHistoryQueryRepository } from "../src/server/database/sqlite-metric-history.ts";
 import { createLocalDocumentStorage } from "../src/server/document-storage.ts";
-import { createConfirmationService } from "../src/server/confirmation-service.ts";
 
 test("schema 6 upgrades and reopens without losing results, sources or favourites", async () => {
   const directory = await mkdtemp(path.join(tmpdir(), "health-persistence-"));
@@ -40,13 +39,21 @@ test("schema 6 upgrades and reopens without losing results, sources or favourite
       mediaType: "text/plain", sizeBytes: contents.length, sha256: hash, storagePath,
     });
     database.prepare("UPDATE import_sessions SET status = 'needs_review' WHERE id = ?").run(importId);
-    const result = createConfirmationService(createSqliteConfirmationRepository(database)).confirm({
-      importSessionId: importId, collectedAt: "2025-01-01", laboratoryName: "Synthetic Lab",
-      specimen: "Кровь", note: "Синтетическая заметка",
-      observations: [{ metricDefinitionId: "1", originalName: "LDL", valueText: "3.1",
-        unit: "ммоль/л", referenceLow: "0", referenceHigh: "3", referenceText: "", sourceText: "" }],
-    });
-    assert.equal(result.ok, true);
+    // Seed the previous schema directly: the current repository uses schema 8.
+    database.exec(`
+      INSERT INTO lab_sessions (id, profile_id, import_session_id, source_document_id,
+        collected_at, laboratory_name, specimen, note, created_at, updated_at)
+      VALUES (1, 1, 1, 1, '2025-01-01', 'Synthetic Lab', 'Кровь', 'Синтетическая заметка', '2026-09-05', '2026-09-05');
+      INSERT INTO observations (id, lab_session_id, metric_definition_id, original_name,
+        value_text, value_numeric, source_text, created_at, specimen)
+      VALUES (1, 1, 1, 'LDL', '3.1', 3.1, '', '2026-09-05', 'Кровь');
+      INSERT INTO observation_sources (observation_id, source_document_id, original_name,
+        value_text, value_numeric, created_at) VALUES (1, 1, 'LDL', '3.1', 3.1, '2026-09-05');
+      INSERT INTO lab_session_documents (lab_session_id, source_document_id, original_file_name,
+        note, created_at) VALUES (1, 1, 'synthetic.txt', 'Синтетическая заметка', '2026-09-05');
+      UPDATE import_sessions SET status = 'confirmed', confirmed_at = '2026-09-05' WHERE id = 1;
+      INSERT INTO import_confirmation_results VALUES (1, 1, 'created', 1, 0, 0, '2026-09-05');
+    `);
     const installation = database.prepare("SELECT value FROM application_metadata WHERE key = 'installation_id'").get().value;
     applyMigrations(database);
     createSqliteFavoriteMetricCommandRepository(database).add(profile.profileId, 1);
@@ -61,6 +68,9 @@ test("schema 6 upgrades and reopens without losing results, sources or favourite
     const history = queries.getMetricHistory(profile.profileId, 1);
     assert.equal(history.observations.length, 1);
     assert.equal(history.observations[0].valueNumeric, 3.1);
+    assert.equal(createSqliteConfirmationRepository(database).getConfirmed(1).observations[0].id, 1);
+    assert.equal(database.prepare("SELECT value_numeric FROM observations WHERE id = 1").get().value_numeric, 3.1);
+    assert.deepEqual(database.prepare("PRAGMA foreign_key_check").all(), []);
     assert.equal(history.observations[0].sources[0].note, "Синтетическая заметка");
     assert.equal(queries.listProfileMetrics(profile.profileId)[0].favoriteOrder, 0);
     assert.deepEqual(await storage.read(storagePath), contents);

@@ -465,6 +465,68 @@ export const migrations: Migration[] = [
       ON favorite_metrics (profile_id, sort_order, metric_definition_id);
     `,
   },
+  {
+    version: 8,
+    name: "text_results_and_document_variants",
+    // Expand and switch: retain the numeric-only tables and existing observation IDs.
+    sql: `
+      CREATE TABLE confirmed_observations (
+        id INTEGER PRIMARY KEY,
+        lab_session_id INTEGER NOT NULL REFERENCES lab_sessions(id),
+        metric_definition_id INTEGER NOT NULL REFERENCES metric_definitions(id),
+        original_name TEXT NOT NULL,
+        value_text TEXT NOT NULL,
+        value_numeric REAL,
+        comparator TEXT CHECK (comparator IN ('<', '<=', '>', '>=')),
+        unit TEXT,
+        reference_low REAL,
+        reference_high REAL,
+        reference_text TEXT,
+        source_text TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        specimen TEXT,
+        CHECK (value_numeric IS NOT NULL OR comparator IS NULL),
+        UNIQUE (lab_session_id, metric_definition_id)
+      );
+      CREATE INDEX confirmed_observations_metric
+      ON confirmed_observations (metric_definition_id, lab_session_id);
+      INSERT INTO confirmed_observations (
+        id, lab_session_id, metric_definition_id, original_name, value_text,
+        value_numeric, comparator, unit, reference_low, reference_high,
+        reference_text, source_text, created_at, specimen
+      ) SELECT id, lab_session_id, metric_definition_id, original_name, value_text,
+        value_numeric, comparator, unit, reference_low, reference_high,
+        reference_text, source_text, created_at, specimen FROM observations;
+
+      CREATE TABLE confirmed_observation_sources (
+        observation_id INTEGER NOT NULL REFERENCES confirmed_observations(id),
+        source_document_id INTEGER NOT NULL REFERENCES source_documents(id),
+        variant_index INTEGER NOT NULL DEFAULT 0,
+        original_name TEXT NOT NULL,
+        value_text TEXT NOT NULL,
+        value_numeric REAL,
+        comparator TEXT CHECK (comparator IN ('<', '<=', '>', '>=')),
+        unit TEXT,
+        specimen TEXT,
+        reference_low REAL,
+        reference_high REAL,
+        reference_text TEXT,
+        source_text TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        CHECK (value_numeric IS NOT NULL OR comparator IS NULL),
+        PRIMARY KEY (observation_id, source_document_id, variant_index)
+      );
+      CREATE INDEX confirmed_observation_sources_document
+      ON confirmed_observation_sources (source_document_id, observation_id);
+      INSERT INTO confirmed_observation_sources (
+        observation_id, source_document_id, original_name, value_text,
+        value_numeric, comparator, unit, specimen, reference_low,
+        reference_high, reference_text, source_text, created_at
+      ) SELECT observation_id, source_document_id, original_name, value_text,
+        value_numeric, comparator, unit, specimen, reference_low,
+        reference_high, reference_text, source_text, created_at FROM observation_sources;
+    `,
+  },
 ];
 
 export function applyMigrations(database: DatabaseSync) {

@@ -94,21 +94,40 @@ export function validateConfirmation(
     }
     conflictResolutions.set(metricDefinitionId, resolution.choice);
   }
-  const usedMetricIds = new Set<number>();
-  const observations: ValidatedObservation[] = [];
+  const parsed: ValidatedObservation[] = [];
 
   for (let index = 0; index < input.observations.length; index += 1) {
     const result = validateObservation(input.observations[index], metricIds);
     if (!result.ok) {
       return invalid(`Строка ${index + 1}: ${result.error}`);
     }
-    if (usedMetricIds.has(result.value.metricDefinitionId)) {
-      return invalid(
-        `Строка ${index + 1}: этот показатель уже есть в документе.`,
-      );
+    parsed.push(result.value);
+  }
+
+  const choices = new Map<number, number>();
+  for (const choice of input.duplicateResolutions ?? []) {
+    const metricId = Number(choice.metricDefinitionId);
+    const rowIndex = Number(choice.rowIndex);
+    if (!choice.rowIndex.trim() || !Number.isInteger(rowIndex) ||
+        parsed[rowIndex]?.metricDefinitionId !== metricId || choices.has(metricId)) {
+      return invalid("Выберите основную строку для каждого повтора в документе.");
     }
-    usedMetricIds.add(result.value.metricDefinitionId);
-    observations.push(result.value);
+    choices.set(metricId, rowIndex);
+  }
+  const observations: ValidatedObservation[] = [];
+  for (const metricId of new Set(parsed.map((row) => row.metricDefinitionId))) {
+    const group = parsed.filter((row) => row.metricDefinitionId === metricId);
+    if (group.length === 1) {
+      observations.push(group[0]);
+      continue;
+    }
+    const selectedIndex = choices.get(metricId);
+    if (selectedIndex === undefined) {
+      const name = metrics.find((metric) => metric.id === metricId)!.displayName;
+      return invalid(`«${name}» уже есть в нескольких строках. Выберите основную строку в разделе «Повторы в документе».`);
+    }
+    const selected = parsed[selectedIndex];
+    observations.push({ ...selected, documentAlternatives: group.filter((row) => row !== selected) });
   }
 
   return {
@@ -139,14 +158,22 @@ function validateObservation(
     return invalid("укажите исходное название до 200 символов.");
   }
 
-  const value = input.valueText.trim().match(VALUE);
-  if (!value) {
+  const valueText = input.valueText.trim();
+  const textResult = input.valueKind === "text";
+  if (input.valueKind && input.valueKind !== "number" && !textResult) {
+    return invalid("выберите тип результата: число или текст.");
+  }
+  if (!valueText || valueText.length > 200) {
+    return invalid("укажите результат до 200 символов.");
+  }
+  const value = valueText.match(VALUE);
+  if (!textResult && !value) {
     return invalid("значение должно быть числом, можно со знаком <, ≤, > или ≥.");
   }
-  const comparator = normalizeComparator(value[1]);
-  const numericText = value[2].replace(",", ".");
-  const valueNumeric = Number(numericText);
-  if (!Number.isFinite(valueNumeric)) {
+  const comparator = textResult ? null : normalizeComparator(value![1]);
+  const numericText = textResult ? "" : value![2].replace(",", ".");
+  const valueNumeric = textResult ? null : Number(numericText);
+  if (valueNumeric !== null && !Number.isFinite(valueNumeric)) {
     return invalid("значение должно быть конечным числом.");
   }
 
@@ -171,7 +198,7 @@ function validateObservation(
     value: {
       metricDefinitionId,
       originalName,
-      valueText: `${comparator ?? ""}${numericText}`,
+      valueText: textResult ? valueText : `${comparator ?? ""}${numericText}`,
       valueNumeric,
       comparator,
       unit,

@@ -3,11 +3,12 @@ import type { MetricPoint } from "@/server/metric-history";
 export type ChartPoint = MetricPoint & { x: number; y: number };
 
 export function buildChartGeometry(
-  points: MetricPoint[],
+  inputPoints: MetricPoint[],
   width: number,
   height: number,
   padding: number,
 ) {
+  const points = inputPoints.filter((point): point is MetricPoint & { valueNumeric: number } => point.valueNumeric !== null);
   if (points.length === 0) {
     return { points: [] as ChartPoint[], min: 0, max: 0, referenceArea: null };
   }
@@ -65,7 +66,7 @@ export function buildChartGeometry(
 
 export function isOutsideReference(point: MetricPoint) {
   // A reporting threshold is not an exact measurement.
-  if (point.comparator) return false;
+  if (point.comparator || point.valueNumeric === null) return false;
   return (
     (point.referenceLow !== null && point.valueNumeric < point.referenceLow) ||
     (point.referenceHigh !== null && point.valueNumeric > point.referenceHigh)

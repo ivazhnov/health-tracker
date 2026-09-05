@@ -15,6 +15,7 @@ type ReviewFormProps = {
 };
 
 type ReviewRow = {
+  valueKind: "number" | "text";
   needsReview: boolean;
   key: number;
   metricDefinitionId: number | null;
@@ -39,6 +40,7 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
   });
   const [rows, setRows] = useState<ReviewRow[]>(() =>
     draft.observations.map((observation, key) => ({
+      valueKind: /^([<>]=?|≤|≥)?\s*-?\d+(?:[.,]\d+)?$/.test(observation.valueText.trim()) ? "number" : "text",
       needsReview: observation.confidence < 0.85,
       key,
       metricDefinitionId: observation.metricDefinitionId,
@@ -56,6 +58,14 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
   );
   const action = confirmImportAction.bind(null, importSessionId);
   const [state, formAction, pending] = useActionState(action, INITIAL_STATE);
+  const groups = new Map<number, { row: ReviewRow; index: number }[]>();
+  rows.forEach((row, index) => {
+    if (row.metricDefinitionId === null) return;
+    const group = groups.get(row.metricDefinitionId) ?? [];
+    group.push({ row, index });
+    groups.set(row.metricDefinitionId, group);
+  });
+  const duplicates = [...groups].filter(([, group]) => group.length > 1);
 
   function addRow() {
     const key = nextKey.current;
@@ -64,6 +74,7 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
       ...current,
       {
         key,
+        valueKind: "number",
         needsReview: true,
         metricDefinitionId: null,
         originalName: "",
@@ -168,6 +179,7 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
       <section className="content-card review-table-card">
         <h2>Показатели</h2>
         <p className="muted-copy">Исправляйте данные прямо в ячейках. Показатель — единое название в каталоге, группа — его категория.</p>
+        {duplicates.length ? <p className="notice">Есть повторяющиеся показатели. Выберите основные значения в разделе «Повторы в документе» под таблицей.</p> : null}
         <div className="table-wrap">
           <table className="review-table">
             <thead><tr>
@@ -191,7 +203,7 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
                     aria-label={`${({valueText: "Значение", unit: "Единица", referenceLow: "Референс от", referenceHigh: "Референс до", referenceText: "Референс текстом"})[field]}, строка ${index + 1}`}
                     name={field} value={row[field]} required={field === "valueText"}
                     onChange={(event) => updateRow(row.key, field, event.target.value)}
-                  /></td>
+                  />{field === "valueText" ? <select aria-label={`Тип результата, строка ${index + 1}`} name="valueKind" value={row.valueKind} onChange={(event) => updateRow(row.key, "valueKind", event.target.value as ReviewRow["valueKind"])}><option value="number">Число</option><option value="text">Текст</option></select> : null}</td>
                 ))}
                 <td><button className="text-button" aria-label={`Удалить строку ${index + 1}`} onClick={() => removeRow(row.key)} type="button">Удалить</button></td>
               </tr>
@@ -204,7 +216,31 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
         + Добавить показатель
       </button>
 
-      {state.error ? <p className="notice error">{state.error}</p> : null}
+      {duplicates.length ? (
+        <section className="content-card conflict-section">
+          <h2>Повторы в документе</h2>
+          <p>Один показатель встречается в нескольких строках. Выберите основную строку для истории. Все варианты и их референсы сохранятся. Если это разные показатели, исправьте сопоставление в таблице.</p>
+          <div className="conflict-list">
+            {duplicates.map(([metricId, group]) => (
+              <fieldset className="conflict-card" key={JSON.stringify(group)}>
+                <legend>{metrics.find((metric) => metric.id === metricId)?.displayName}</legend>
+                <input type="hidden" name="duplicateMetricDefinitionId" value={metricId} readOnly />
+                {group.map(({ row, index }) => (
+                  <label key={row.key}>
+                    <input type="radio" required name={`duplicateChoice-${metricId}`} value={index} />
+                    <span><small>Строка {index + 1}: {row.originalName}</small>
+                      <strong>{formatConflictValue(row)}</strong>
+                      <small>Референс: {row.referenceText || [row.referenceLow || "…", row.referenceHigh || "…"].join(" — ")}</small>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {state.error ? <p role="alert" className="notice error">{state.error}</p> : null}
 
       {state.conflicts.length ? (
         <section className="content-card conflict-section">

@@ -28,6 +28,10 @@ export async function confirmImportAction(
       note: text(formData, "note"),
       observations: rows(formData),
       conflictResolutions: conflictResolutions(formData),
+      duplicateResolutions: texts(formData, "duplicateMetricDefinitionId").map((metricDefinitionId) => ({
+        metricDefinitionId,
+        rowIndex: text(formData, `duplicateChoice-${metricDefinitionId}`),
+      })),
     });
   } catch {
     return {
@@ -59,6 +63,7 @@ function rows(formData: FormData) {
   const metricIds = texts(formData, "metricDefinitionId");
   const originalNames = texts(formData, "originalName");
   const values = texts(formData, "valueText");
+  const valueKinds = texts(formData, "valueKind");
   const units = texts(formData, "unit");
   const referenceLows = texts(formData, "referenceLow");
   const referenceHighs = texts(formData, "referenceHigh");
@@ -67,6 +72,7 @@ function rows(formData: FormData) {
 
   return metricIds.map((metricDefinitionId, index) => ({
     metricDefinitionId,
+    valueKind: valueKinds[index] ?? "number",
     originalName: originalNames[index] ?? "",
     valueText: values[index] ?? "",
     unit: units[index] ?? "",

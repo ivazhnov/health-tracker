@@ -7,6 +7,7 @@ export type MetricDefinitionOption = {
 };
 
 export type ConfirmationObservationInput = {
+  valueKind?: string;
   metricDefinitionId: string;
   originalName: string;
   valueText: string;
@@ -25,6 +26,7 @@ export type ConfirmImportInput = {
   note: string;
   observations: ConfirmationObservationInput[];
   conflictResolutions?: ConflictResolutionInput[];
+  duplicateResolutions?: { metricDefinitionId: string; rowIndex: string }[];
 };
 
 export type ConflictResolutionInput = {
@@ -38,7 +40,8 @@ export type ValidatedObservation = {
   metricDefinitionId: number;
   originalName: string;
   valueText: string;
-  valueNumeric: number;
+  valueNumeric: number | null;
+  documentAlternatives?: ValidatedObservation[];
   comparator: "<" | "<=" | ">" | ">=" | null;
   unit: string | null;
   referenceLow: number | null;

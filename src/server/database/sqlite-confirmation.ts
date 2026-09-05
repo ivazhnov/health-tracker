@@ -53,7 +53,7 @@ type ObservationRow = {
   category: string;
   original_name: string;
   value_text: string;
-  value_numeric: number;
+  value_numeric: number | null;
   comparator: "<" | "<=" | ">" | ">=" | null;
   unit: string | null;
   specimen: string | null;
@@ -112,9 +112,9 @@ export function createSqliteConfirmationRepository(
       o.original_name, o.value_text, o.value_numeric, o.comparator,
       o.unit, o.specimen, o.reference_low, o.reference_high,
       o.reference_text, o.source_text,
-      (SELECT COUNT(*) FROM observation_sources s WHERE s.observation_id = o.id)
+      (SELECT COUNT(DISTINCT source_document_id) FROM confirmed_observation_sources s WHERE s.observation_id = o.id)
         AS source_count
-    FROM observations o
+    FROM confirmed_observations o
     JOIN metric_definitions m ON m.id = o.metric_definition_id
     WHERE o.lab_session_id = ?
     ORDER BY o.id
@@ -126,14 +126,14 @@ export function createSqliteConfirmationRepository(
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const insertObservation = database.prepare(`
-    INSERT INTO observations (
+    INSERT INTO confirmed_observations (
       lab_session_id, metric_definition_id, original_name, value_text,
       value_numeric, comparator, unit, reference_low, reference_high,
       reference_text, source_text, created_at, specimen
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const updateObservation = database.prepare(`
-    UPDATE observations
+    UPDATE confirmed_observations
     SET original_name = ?, value_text = ?, value_numeric = ?, comparator = ?,
         unit = ?, reference_low = ?, reference_high = ?, reference_text = ?,
         source_text = ?, specimen = ?
@@ -146,11 +146,11 @@ export function createSqliteConfirmationRepository(
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
   const insertObservationSource = database.prepare(`
-    INSERT OR IGNORE INTO observation_sources (
+    INSERT OR IGNORE INTO confirmed_observation_sources (
       observation_id, source_document_id, original_name, value_text,
       value_numeric, comparator, unit, specimen, reference_low,
-      reference_high, reference_text, source_text, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      reference_high, reference_text, source_text, created_at, variant_index
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const completeImport = database.prepare(`
     UPDATE import_sessions
@@ -440,6 +440,7 @@ function sameObservation(
 ) {
   return (
     existing.value_numeric === incoming.valueNumeric &&
+    (incoming.valueNumeric !== null || existing.value_text === incoming.valueText) &&
     existing.comparator === incoming.comparator &&
     normalizeDeduplicationText(existing.unit) ===
       normalizeDeduplicationText(incoming.unit)
@@ -545,21 +546,24 @@ function addObservationSource(
   now: string,
   statement: ReturnType<DatabaseSync["prepare"]>,
 ) {
-  statement.run(
-    observationId,
-    sourceDocumentId,
-    observation.originalName,
-    observation.valueText,
-    observation.valueNumeric,
-    observation.comparator,
-    observation.unit,
-    specimen,
-    observation.referenceLow,
-    observation.referenceHigh,
-    observation.referenceText,
-    observation.sourceText,
-    now,
-  );
+  for (const [index, variant] of [observation, ...(observation.documentAlternatives ?? [])].entries()) {
+    statement.run(
+      observationId,
+      sourceDocumentId,
+      variant.originalName,
+      variant.valueText,
+      variant.valueNumeric,
+      variant.comparator,
+      variant.unit,
+      specimen,
+      variant.referenceLow,
+      variant.referenceHigh,
+      variant.referenceText,
+      variant.sourceText,
+      now,
+      index,
+    );
+  }
 }
 
 function finishConfirmation(

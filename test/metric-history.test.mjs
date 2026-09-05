@@ -86,6 +86,20 @@ test("a reporting threshold is not classified as an exact out-of-range result", 
   assert.equal(isOutsideReference(measurement), false);
 });
 
+test("text results remain visible in history without a numeric chart point", () => {
+  const database = createDatabase();
+  seedHistory(database);
+  database.exec("UPDATE confirmed_observations SET value_text = 'Отрицательно', value_numeric = NULL WHERE id = 2");
+  const queries = createSqliteMetricHistoryQueryRepository(database);
+  const latest = queries.listProfileMetrics(1).find(({ id }) => id === 1).latest;
+  assert.equal(latest.valueNumeric, null);
+  assert.equal(latest.valueText, "Отрицательно");
+  assert.equal(isOutsideReference(latest), false);
+  assert.equal(buildChartGeometry([latest], 320, 110, 12).points.length, 0);
+  assert.equal(queries.getMetricHistory(1, 1).observations[1].valueText, "Отрицательно");
+  database.close();
+});
+
 function createDatabase() {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON");
@@ -135,7 +149,7 @@ function seedHistory(database) {
       (2, 1, 2, 2, '2025-01-10', 'Lab', 'Кровь', 'После простуды', '2026-09-04', '2026-09-04'),
       (3, 2, 3, 3, '2025-02-10', 'Lab', 'Кровь', '', '2026-09-04', '2026-09-04');
 
-    INSERT INTO observations (
+    INSERT INTO confirmed_observations (
       id, lab_session_id, metric_definition_id, original_name, value_text,
       value_numeric, unit, reference_low, reference_high, source_text, created_at, specimen
     ) VALUES
@@ -152,7 +166,7 @@ function seedHistory(database) {
       (2, 4, 'ornament-2025.txt', 'Lab', 'Кровь', '', '2026-09-04'),
       (3, 3, 'wife-ldl.txt', 'Lab', 'Кровь', '', '2026-09-04');
 
-    INSERT INTO observation_sources (
+    INSERT INTO confirmed_observation_sources (
       observation_id, source_document_id, original_name, value_text, value_numeric,
       unit, specimen, reference_low, reference_high, source_text, created_at
     ) VALUES
