@@ -5,7 +5,6 @@ import {
   confirmImportAction,
   type ConfirmationActionState,
 } from "@/app/confirmation/actions";
-import { SPECIMEN_OPTIONS, type SpecimenCode } from "@/domain/specimens";
 import type { MetricDefinitionOption } from "@/server/confirmation";
 import type { StoredRecognitionDraft } from "@/server/recognition";
 
@@ -29,8 +28,6 @@ type ReviewRow = {
   referenceHigh: string;
   referenceText: string;
   sourceText: string;
-  specimenCode: SpecimenCode;
-  sourceSpecimenText: string;
 };
 
 const INITIAL_STATE: ConfirmationActionState = { error: null, conflicts: [] };
@@ -69,10 +66,6 @@ export function ReviewForm({
           ? ""
           : (observation.referenceText ?? ""),
       sourceText: observation.sourceText,
-      specimenCode: isDraftSpecimenCode(observation.specimenCode)
-        ? observation.specimenCode
-        : "unknown",
-      sourceSpecimenText: observation.sourceSpecimenText ?? "",
     })),
   );
   const [state, formAction, pending] = useActionState(
@@ -121,8 +114,6 @@ export function ReviewForm({
         referenceHigh: "",
         referenceText: "",
         sourceText: "Добавлено вручную",
-        specimenCode: "unknown",
-        sourceSpecimenText: "",
       },
     ]);
     setDirty(true);
@@ -197,12 +188,6 @@ export function ReviewForm({
             ))}
             {issueRows.some((row) => row.metricDefinitionId === null) ? (
               <li>Для части строк нужно выбрать показатель.</li>
-            ) : null}
-            {issueRows.some((row) => row.specimenCode === "unknown") ? (
-              <li>
-                У части строк не определён биоматериал. Это можно оставить как
-                есть.
-              </li>
             ) : null}
           </ul>
         </details>
@@ -311,7 +296,6 @@ export function ReviewForm({
                 <th>Показатель</th>
                 <th>Результат</th>
                 <th>Референс</th>
-                <th>Биоматериал</th>
                 <th>Проверка</th>
                 <th aria-label="Действия" />
               </tr>
@@ -329,30 +313,32 @@ export function ReviewForm({
                     className={issues.length ? "issue-row" : undefined}
                   >
                     <td data-label="Показатель">
-                      <select
-                        aria-label={`Показатель, строка ${index + 1}`}
-                        name="metricDefinitionId"
-                        required
-                        value={row.metricDefinitionId ?? ""}
-                        onChange={(event) =>
-                          updateRow(
-                            row.key,
-                            "metricDefinitionId",
-                            event.target.value
-                              ? Number(event.target.value)
-                              : null,
-                          )
-                        }
-                      >
-                        <option value="">Не сопоставлен</option>
-                        {metrics.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.displayName}
-                          </option>
-                        ))}
-                      </select>
-                      <small title={row.originalName}>{row.originalName}</small>
-                      <em>{metric?.category ?? "Нужно сопоставить"}</em>
+                      <div className="metric-editor">
+                        <select
+                          aria-label={`Показатель, строка ${index + 1}`}
+                          name="metricDefinitionId"
+                          required
+                          value={row.metricDefinitionId ?? ""}
+                          onChange={(event) =>
+                            updateRow(
+                              row.key,
+                              "metricDefinitionId",
+                              event.target.value
+                                ? Number(event.target.value)
+                                : null,
+                            )
+                          }
+                        >
+                          <option value="">Не сопоставлен</option>
+                          {metrics.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.displayName}
+                            </option>
+                          ))}
+                        </select>
+                        <small title={row.originalName}>{row.originalName}</small>
+                        <em>{metric?.category ?? "Нужно сопоставить"}</em>
+                      </div>
                       <input
                         name="originalName"
                         type="hidden"
@@ -442,34 +428,6 @@ export function ReviewForm({
                           </label>
                         </div>
                       </details>
-                    </td>
-                    <td data-label="Биоматериал">
-                      <select
-                        aria-label={`Биоматериал, строка ${index + 1}`}
-                        name="specimenCode"
-                        value={row.specimenCode}
-                        onChange={(event) =>
-                          updateRow(
-                            row.key,
-                            "specimenCode",
-                            event.target.value as SpecimenCode,
-                          )
-                        }
-                      >
-                        {SPECIMEN_OPTIONS.map(({ code, label }) => (
-                          <option key={code} value={code}>
-                            {label}
-                          </option>
-                        ))}
-                      </select>
-                      <small title={row.sourceSpecimenText}>
-                        {row.sourceSpecimenText || "В документе не указан"}
-                      </small>
-                      <input
-                        name="sourceSpecimenText"
-                        type="hidden"
-                        value={row.sourceSpecimenText}
-                      />
                     </td>
                     <td data-label="Проверка">
                       <span
@@ -634,14 +592,10 @@ export function ReviewForm({
 function inferValueKind(value: string): ReviewRow["valueKind"] {
   return NUMBER_VALUE.test(value.trim()) ? "number" : "text";
 }
-function isDraftSpecimenCode(value: string): value is SpecimenCode {
-  return SPECIMEN_OPTIONS.some(({ code }) => code === value);
-}
 function rowIssues(row: ReviewRow) {
   const issues: string[] = [];
   if (row.metricDefinitionId === null) issues.push("Не сопоставлен");
   if (!row.valueText.trim()) issues.push("Нет результата");
-  if (row.specimenCode === "unknown") issues.push("Нет биоматериала");
   if (row.needsReview) issues.push("Низкая уверенность");
   return issues;
 }
@@ -683,7 +637,6 @@ function humanizeWarning(value: string) {
   if (warning.includes("не найдены"))
     return "Результаты не удалось уверенно выделить из документа.";
   if (warning.includes("дат")) return "Проверьте дату забора материала.";
-  if (warning.includes("материал"))
-    return "В документе встречаются разные или неясные биоматериалы.";
+  if (warning.includes("материал")) return "";
   return "Проверьте строки, отмеченные как требующие внимания.";
 }

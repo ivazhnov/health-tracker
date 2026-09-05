@@ -137,7 +137,6 @@ function ConfirmedResults({ session }: { session: ConfirmedLabSession }) {
               <th>Результат</th>
               <th>Референс</th>
               <th>Статус</th>
-              <th>Материал</th>
             </tr>
           </thead>
           <tbody>
@@ -160,7 +159,6 @@ function ConfirmedResults({ session }: { session: ConfirmedLabSession }) {
                   <td data-label="Статус">
                     <span className={`status-badge ${kind}`}>{status}</span>
                   </td>
-                  <td data-label="Материал">{item.specimen || "—"}</td>
                 </tr>
               );
             })}

@@ -7,11 +7,6 @@ import type {
   ValidatedConfirmation,
   ValidatedObservation,
 } from "@/server/confirmation";
-import {
-  isSpecimenCode,
-  recognizeSpecimen,
-  specimenLabel,
-} from "../domain/specimens.ts";
 
 const NUMBER = /^-?\d+(?:[.,]\d+)?$/;
 const VALUE = /^([<>]=?|≤|≥)?\s*(-?\d+(?:[.,]\d+)?)$/;
@@ -96,14 +91,7 @@ export function validateConfirmation(
 
   for (let index = 0; index < input.observations.length; index += 1) {
     const row = input.observations[index];
-    const result = validateObservation(
-      {
-        ...row,
-        specimenCode: row.specimenCode || recognizeSpecimen(input.specimen),
-        sourceSpecimenText: row.sourceSpecimenText || input.specimen,
-      },
-      metricIds,
-    );
+    const result = validateObservation(row, metricIds);
     if (!result.ok) {
       return invalid(`Строка ${index + 1}: ${result.error}`);
     }
@@ -155,7 +143,6 @@ export function validateConfirmation(
       importSessionId: input.importSessionId,
       collectedAt: input.collectedAt,
       laboratoryName,
-      specimen: summarizeSpecimens(observations),
       note,
       observations,
       conflictResolutions,
@@ -219,12 +206,6 @@ function validateObservation(
   const referenceText = optionalText(input.referenceText, 200);
   if (referenceText === undefined)
     return invalid("текст референса слишком длинный.");
-  if (!isSpecimenCode(input.specimenCode))
-    return invalid("выберите биоматериал из списка.");
-  const sourceSpecimenText = optionalText(input.sourceSpecimenText, 200);
-  if (sourceSpecimenText === undefined)
-    return invalid("исходное название биоматериала слишком длинное.");
-
   return {
     ok: true,
     value: {
@@ -238,25 +219,8 @@ function validateObservation(
       referenceHigh,
       referenceText,
       sourceText: input.sourceText.slice(0, 2000),
-      specimen:
-        input.specimenCode === "unknown"
-          ? null
-          : specimenLabel(input.specimenCode),
-      specimenCode: input.specimenCode,
-      sourceSpecimenText,
     },
   };
-}
-
-function summarizeSpecimens(observations: ValidatedObservation[]) {
-  const labels = [
-    ...new Set(
-      observations
-        .map(({ specimen }) => specimen)
-        .filter((value): value is string => Boolean(value)),
-    ),
-  ];
-  return labels.length ? labels.join(", ") : null;
 }
 
 function optionalNumber(value: string) {

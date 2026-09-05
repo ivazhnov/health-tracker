@@ -4,9 +4,7 @@ import type {
   ObservationDraft,
   RecognitionDraft,
 } from "@/server/recognition";
-import { recognizeSpecimen, specimenLabel } from "../domain/specimens.ts";
-
-const RECOGNITION_VERSION = "local-1";
+const RECOGNITION_VERSION = "local-2";
 
 const NUMBER = "-?\\d+(?:[.,]\\d+)?";
 const VALUE = new RegExp(`(?:^|[\\s:;=])([<>≤≥]?\\s*${NUMBER})`, "u");
@@ -31,7 +29,6 @@ export function extractDraft(
   const observations: ObservationDraft[] = [];
   const languageCounts = new Map<string, number>();
   const warnings: string[] = [];
-  const documentSpecimen = findSpecimen(text);
 
   for (const sourceText of text.split(/\r?\n/)) {
     const line = sourceText.replace(/\s+/g, " ").trim();
@@ -45,7 +42,7 @@ export function extractDraft(
     if (matchedAlias) {
       const parsed = parseKnownLine(line, normalizedLine, matchedAlias);
       if (parsed) {
-        observations.push(withSpecimen(parsed, documentSpecimen));
+        observations.push(parsed);
         languageCounts.set(
           matchedAlias.language,
           (languageCounts.get(matchedAlias.language) ?? 0) + 1,
@@ -55,7 +52,7 @@ export function extractDraft(
     }
 
     const unknown = parseUnknownLine(line);
-    if (unknown) observations.push(withSpecimen(unknown, documentSpecimen));
+    if (unknown) observations.push(unknown);
   }
 
   if (observations.length === 0) {
@@ -76,20 +73,9 @@ export function extractDraft(
     detectedLanguage: mostFrequentLanguage(languageCounts),
     laboratoryName: findLaboratory(text),
     collectedAt: findDate(text),
-    specimen: documentSpecimen,
+    specimen: null,
     warnings,
     observations,
-  };
-}
-
-function withSpecimen(
-  observation: ObservationDraft,
-  sourceSpecimenText: string | null,
-) {
-  return {
-    ...observation,
-    specimenCode: recognizeSpecimen(sourceSpecimenText),
-    sourceSpecimenText,
   };
 }
 
@@ -123,8 +109,6 @@ function parseKnownLine(
     ...reference,
     confidence,
     sourceText,
-    specimenCode: "unknown",
-    sourceSpecimenText: null,
   } satisfies ObservationDraft;
 }
 
@@ -154,8 +138,6 @@ function parseUnknownLine(sourceText: string) {
     ...parseReference(afterValue),
     confidence: 0.5,
     sourceText,
-    specimenCode: "unknown",
-    sourceSpecimenText: null,
   } satisfies ObservationDraft;
 }
 
@@ -237,11 +219,4 @@ function validDate(year: number, month: number, day: number) {
   const value = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
   const parsed = new Date(`${value}T00:00:00Z`);
   return parsed.toISOString().slice(0, 10) === value ? value : null;
-}
-
-function findSpecimen(text: string) {
-  const normalized = normalize(text);
-  const code = recognizeSpecimen(normalized);
-  if (code !== "unknown" && code !== "other") return specimenLabel(code);
-  return null;
 }

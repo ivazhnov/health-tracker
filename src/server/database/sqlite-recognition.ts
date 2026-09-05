@@ -47,8 +47,6 @@ type DraftRow = {
   reference_text: string | null;
   confidence: number;
   source_text: string;
-  specimen_code: string;
-  source_specimen_text: string | null;
 };
 
 export function createSqliteRecognitionRepository(
@@ -108,8 +106,8 @@ export function createSqliteRecognitionRepository(
     INSERT INTO observation_drafts (
       import_session_id, metric_definition_id, original_name, value_text,
       unit, reference_low, reference_high, reference_text, confidence,
-      source_text, sort_order, created_at, specimen_code, source_specimen_text
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      source_text, sort_order, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const completeImport = database.prepare(`
     UPDATE import_sessions
@@ -140,8 +138,7 @@ export function createSqliteRecognitionRepository(
       d.reference_high,
       d.reference_text,
       d.confidence,
-      d.source_text,
-      d.specimen_code, d.source_specimen_text
+      d.source_text
     FROM observation_drafts d
     LEFT JOIN metric_definitions m ON m.id = d.metric_definition_id
     WHERE d.import_session_id = ?
@@ -173,7 +170,7 @@ export function createSqliteRecognitionRepository(
           draft.detectedLanguage,
           draft.laboratoryName,
           draft.collectedAt,
-          draft.specimen,
+          null,
           JSON.stringify(draft.warnings),
           now,
           now,
@@ -228,8 +225,6 @@ export function createSqliteRecognitionRepository(
             item.sourceText,
             index,
             now,
-            item.specimenCode,
-            item.sourceSpecimenText,
           );
         });
         completeImport.run(now, importSessionId);
@@ -260,7 +255,7 @@ export function createSqliteRecognitionRepository(
         detectedLanguage: extraction.detected_language,
         laboratoryName: extraction.laboratory_name,
         collectedAt: extraction.collected_at,
-        specimen: extraction.specimen,
+        specimen: null,
         warnings: parseWarnings(extraction.warnings_json),
         observations,
       };
@@ -303,8 +298,6 @@ function mapDraft(row: DraftRow): ObservationDraft {
     referenceText: row.reference_text,
     confidence: row.confidence,
     sourceText: row.source_text,
-    specimenCode: row.specimen_code,
-    sourceSpecimenText: row.source_specimen_text,
   };
 }
 

@@ -17,9 +17,8 @@ export function MetricChart({
     return <p className="muted-copy">Есть текстовые результаты — сравните их в истории. Числовой график не строится.</p>;
   }
   const units = new Set(points.map((point) => point.unit));
-  const materials = new Set(points.map((point) => point.specimen?.trim().toLocaleLowerCase() ?? ""));
-  if (units.size > 1 || materials.size > 1) {
-    return <p className="muted-copy">Разные единицы или материалы — сравните значения в истории.</p>;
+  if (units.size > 1) {
+    return <p className="muted-copy">Разные единицы измерения — сравните значения в истории.</p>;
   }
   if (points.length < 2) {
     return <div className="chart-empty"><strong>Недостаточно данных для графика</strong><span>Нужно как минимум два сопоставимых измерения.</span></div>;

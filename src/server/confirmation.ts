@@ -16,15 +16,12 @@ export type ConfirmationObservationInput = {
   referenceHigh: string;
   referenceText: string;
   sourceText: string;
-  specimenCode: string;
-  sourceSpecimenText: string;
 };
 
 export type ConfirmImportInput = {
   importSessionId: number;
   collectedAt: string;
   laboratoryName: string;
-  specimen: string;
   note: string;
   observations: ConfirmationObservationInput[];
   conflictResolutions?: ConflictResolutionInput[];
@@ -50,16 +47,12 @@ export type ValidatedObservation = {
   referenceHigh: number | null;
   referenceText: string | null;
   sourceText: string;
-  specimen: string | null;
-  specimenCode: string;
-  sourceSpecimenText: string | null;
 };
 
 export type ValidatedConfirmation = {
   importSessionId: number;
   collectedAt: string;
   laboratoryName: string | null;
-  specimen: string | null;
   note: string;
   observations: ValidatedObservation[];
   conflictResolutions: Map<number, ConflictChoice>;
@@ -106,6 +99,9 @@ export type ConfirmedObservation = ValidatedObservation & {
   id: number;
   displayName: string;
   category: string;
+  specimen: string | null;
+  specimenCode: string;
+  sourceSpecimenText: string | null;
   sourceCount: number;
 };
 

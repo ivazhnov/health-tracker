@@ -90,8 +90,7 @@ export function referenceStatus(point: Pick<MetricPoint, "valueNumeric" | "compa
 export function trendText(points: MetricPoint[]) {
   const [previous, latest] = points.slice(-2);
   if (!previous || !latest || previous.valueNumeric === null || latest.valueNumeric === null ||
-      normalized(previous.unit) !== normalized(latest.unit) ||
-      normalized(previous.specimen) !== normalized(latest.specimen)) return "—";
+      normalized(previous.unit) !== normalized(latest.unit)) return "—";
   const change = latest.valueNumeric - previous.valueNumeric;
   const arrow = change > 0 ? "↑" : change < 0 ? "↓" : "→";
   return `${arrow} ${formatNumber(Math.abs(change))}`;

@@ -14,7 +14,6 @@ function draft() {
     detectedLanguage: "en",
     laboratoryName: null,
     collectedAt: null,
-    specimen: null,
     warnings: [],
     observations: [
       {
@@ -58,15 +57,11 @@ test("AI adapter sends a strict schema and refuses incomplete responses", async 
     const sent = JSON.parse(options.body);
     assert.equal(sent.store, false);
     assert.equal(sent.text.format.strict, true);
-    assert.ok(
-      sent.text.format.schema.properties.observations.items.required.includes(
-        "specimenCode",
-      ),
-    );
-    assert.ok(
-      sent.text.format.schema.properties.observations.items.required.includes(
-        "sourceSpecimenText",
-      ),
+    assert.equal("specimen" in sent.text.format.schema.properties, false);
+    assert.equal(
+      "specimenCode" in
+        sent.text.format.schema.properties.observations.items.properties,
+      false,
     );
     return Response.json({
       status: "completed",
@@ -81,6 +76,7 @@ test("AI adapter sends a strict schema and refuses incomplete responses", async 
     request,
   ).extract(text, aliases);
   assert.equal(result.observations[0].valueText, "3.1");
+  assert.equal(result.specimen, null);
   await assert.rejects(
     createOpenAiDraftExtractor("test", "test", async () =>
       Response.json({ status: "incomplete" }),

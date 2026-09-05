@@ -74,7 +74,6 @@ test("database errors roll back the whole confirmation", () => {
     importSessionId: 1,
     collectedAt: "2026-09-04",
     laboratoryName: "Тестовая лаборатория",
-    specimen: "Кровь",
     note: "",
     observations: [
       {
@@ -241,7 +240,7 @@ test("reconfirming the same source does not duplicate source links", () => {
   assert.equal(count(database, "import_confirmation_results"), 2);
 });
 
-test("the same metric in a different material stays in a separate session", () => {
+test("legacy material metadata does not split a canonical metric", () => {
   const database = createDatabase();
   const service = createConfirmationService(
     createSqliteConfirmationRepository(database),
@@ -249,39 +248,18 @@ test("the same metric in a different material stays in a separate session", () =
   const first = confirmationInput();
   first.observations = [first.observations[0]];
   service.confirm(first);
+  database.prepare("UPDATE lab_sessions SET specimen = 'Кровь'").run();
+  database.prepare("UPDATE confirmed_observations SET specimen = 'Кровь'").run();
   addImport(database, 2);
   const second = confirmationInput(2);
-  second.specimen = "Моча";
   second.observations = [second.observations[0]];
 
   const result = service.confirm(second);
 
   assert.equal(result.ok, true);
-  assert.equal(result.summary.outcome, "created");
-  assert.equal(count(database, "lab_sessions"), 2);
-});
-
-test("repeated reports select the session with the matching material", () => {
-  const database = createDatabase();
-  const service = createConfirmationService(
-    createSqliteConfirmationRepository(database),
-  );
-  const first = confirmationInput();
-  assert.equal(service.confirm(first).ok, true);
-  addImport(database, 2);
-  const second = confirmationInput(2);
-  second.specimen = "Моча";
-  assert.equal(service.confirm(second).ok, true);
-  addImport(database, 3);
-  const repeat = confirmationInput(3);
-  repeat.specimen = "Моча";
-  const result = service.confirm(repeat);
-  assert.equal(result.ok, true);
   assert.equal(result.summary.outcome, "merged");
-  assert.equal(result.labSessionId, 2);
-  assert.equal(count(database, "lab_sessions"), 2);
-  assert.equal(count(database, "confirmed_observations"), 4);
-  assert.equal(count(database, "confirmed_observation_sources"), 6);
+  assert.equal(result.labSessionId, 1);
+  assert.equal(count(database, "lab_sessions"), 1);
 });
 
 test("migration 6 backfills sources for stage 5 confirmations", () => {
@@ -449,37 +427,24 @@ test("invalid numbers are not silently accepted as text", () => {
   database.close();
 });
 
-test("each result keeps canonical and source specimen independently", () => {
+test("new confirmations leave legacy specimen columns empty", () => {
   const database = createDatabase();
-  const repository = createSqliteConfirmationRepository(database);
-  const service = createConfirmationService(repository);
+  const service = createConfirmationService(
+    createSqliteConfirmationRepository(database),
+  );
   const input = confirmationInput();
-  input.specimen = "";
-  input.observations[0].specimenCode = "serum";
-  input.observations[0].sourceSpecimenText = "Serum (SST)";
-  input.observations[1].specimenCode = "urine";
-  input.observations[1].sourceSpecimenText = "Random urine";
 
   assert.equal(service.confirm(input).ok, true);
   assert.deepEqual(
-    repository
-      .getConfirmed(1)
-      .observations.map(({ specimen, specimenCode, sourceSpecimenText }) => ({
-        specimen,
-        specimenCode,
-        sourceSpecimenText,
-      })),
+    database
+      .prepare(
+        "SELECT specimen, specimen_code, source_specimen_text FROM confirmed_observations ORDER BY id",
+      )
+      .all()
+      .map((row) => ({ ...row })),
     [
-      {
-        specimen: "Сыворотка",
-        specimenCode: "serum",
-        sourceSpecimenText: "Serum (SST)",
-      },
-      {
-        specimen: "Моча",
-        specimenCode: "urine",
-        sourceSpecimenText: "Random urine",
-      },
+      { specimen: null, specimen_code: "unknown", source_specimen_text: null },
+      { specimen: null, specimen_code: "unknown", source_specimen_text: null },
     ],
   );
   assert.deepEqual(
@@ -490,8 +455,8 @@ test("each result keeps canonical and source specimen independently", () => {
       .all()
       .map((row) => ({ ...row })),
     [
-      { specimen_code: "serum", source_specimen_text: "Serum (SST)" },
-      { specimen_code: "urine", source_specimen_text: "Random urine" },
+      { specimen_code: "unknown", source_specimen_text: null },
+      { specimen_code: "unknown", source_specimen_text: null },
     ],
   );
   database.close();
@@ -565,7 +530,6 @@ function confirmationInput(importSessionId = 1) {
     importSessionId,
     collectedAt: "2026-09-04",
     laboratoryName: "Тестовая лаборатория",
-    specimen: "Кровь",
     note: "После простуды",
     observations: [
       observation("1", "Холестерин ЛПНП", "3,1", "ммоль/л", "0", "3"),

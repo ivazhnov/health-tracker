@@ -28,8 +28,6 @@ export type ObservationDraft = {
   referenceText: string | null;
   confidence: number;
   sourceText: string;
-  specimenCode: string;
-  sourceSpecimenText: string | null;
 };
 
 export type RecognitionDraft = {

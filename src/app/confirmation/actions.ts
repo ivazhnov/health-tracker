@@ -24,7 +24,6 @@ export async function confirmImportAction(
       importSessionId,
       collectedAt: text(formData, "collectedAt"),
       laboratoryName: text(formData, "laboratoryName"),
-      specimen: text(formData, "specimen"),
       note: text(formData, "note"),
       observations: rows(formData),
       conflictResolutions: conflictResolutions(formData),
@@ -76,8 +75,6 @@ function rows(formData: FormData) {
   const referenceHighs = texts(formData, "referenceHigh");
   const referenceTexts = texts(formData, "referenceText");
   const sourceTexts = texts(formData, "sourceText");
-  const specimenCodes = texts(formData, "specimenCode");
-  const sourceSpecimenTexts = texts(formData, "sourceSpecimenText");
 
   return metricIds.map((metricDefinitionId, index) => ({
     metricDefinitionId,
@@ -89,8 +86,6 @@ function rows(formData: FormData) {
     referenceHigh: referenceHighs[index] ?? "",
     referenceText: referenceTexts[index] ?? "",
     sourceText: sourceTexts[index] ?? "",
-    specimenCode: specimenCodes[index] ?? "unknown",
-    sourceSpecimenText: sourceSpecimenTexts[index] ?? "",
   }));
 }
 

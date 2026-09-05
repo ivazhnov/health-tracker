@@ -29,7 +29,6 @@ type ImportRow = {
 type CandidateRow = {
   id: number;
   laboratory_name: string | null;
-  specimen: string | null;
 };
 
 type LabSessionRow = {
@@ -103,7 +102,7 @@ export function createSqliteConfirmationRepository(
     WHERE import_session_id = ?
   `);
   const readCandidates = database.prepare(`
-    SELECT id, laboratory_name, specimen
+    SELECT id, laboratory_name
     FROM lab_sessions
     WHERE profile_id = ? AND collected_at = ?
     ORDER BY id
@@ -234,34 +233,10 @@ export function createSqliteConfirmationRepository(
           ) as CandidateRow[],
           input.laboratoryName,
         );
-        let candidate: CandidateRow | null = null;
-        let existing: ObservationRow[] = [];
-        for (const possibleCandidate of candidates) {
-          const candidateObservations = readExistingObservations.all(
-            possibleCandidate.id,
-          ) as ObservationRow[];
-          const byMetric = new Map(
-            candidateObservations.map((observation) => [
-              observation.metric_definition_id,
-              observation,
-            ]),
-          );
-          const hasDifferentMaterial = input.observations.some(
-            (observation) => {
-              const current = byMetric.get(observation.metricDefinitionId);
-              return (
-                current &&
-                normalizeDeduplicationText(current.specimen) !==
-                  normalizeDeduplicationText(observation.specimen)
-              );
-            },
-          );
-          if (!hasDifferentMaterial) {
-            candidate = possibleCandidate;
-            existing = candidateObservations;
-            break;
-          }
-        }
+        const candidate = candidates[0] ?? null;
+        const existing = candidate
+          ? (readExistingObservations.all(candidate.id) as ObservationRow[])
+          : [];
         const existingByMetric = new Map(
           existing.map((observation) => [
             observation.metric_definition_id,
@@ -364,9 +339,9 @@ export function createSqliteConfirmationRepository(
               observation.referenceHigh,
               observation.referenceText,
               observation.sourceText,
-              observation.specimen,
-              observation.specimenCode,
-              observation.sourceSpecimenText,
+              null,
+              "unknown",
+              null,
               current.id,
             );
           }
@@ -472,7 +447,7 @@ function createLabSession(
     importRow.source_document_id,
     input.collectedAt,
     input.laboratoryName,
-    input.specimen,
+    null,
     input.note,
     now,
     now,
@@ -509,7 +484,7 @@ function insertDocument(
     importRow.source_document_id,
     importRow.original_file_name,
     input.laboratoryName,
-    input.specimen,
+    null,
     input.note,
     now,
   );
@@ -534,9 +509,9 @@ function addObservation(
     observation.referenceText,
     observation.sourceText,
     now,
-    observation.specimen ?? null,
-    observation.specimenCode ?? "unknown",
-    observation.sourceSpecimenText ?? observation.specimen ?? null,
+    null,
+    "unknown",
+    null,
   );
   return Number(inserted.lastInsertRowid);
 }
@@ -560,15 +535,15 @@ function addObservationSource(
       variant.valueNumeric,
       variant.comparator,
       variant.unit,
-      variant.specimen ?? null,
+      null,
       variant.referenceLow,
       variant.referenceHigh,
       variant.referenceText,
       variant.sourceText,
       now,
       index,
-      variant.specimenCode ?? "unknown",
-      variant.sourceSpecimenText ?? variant.specimen ?? null,
+      "unknown",
+      null,
     );
   }
 }
