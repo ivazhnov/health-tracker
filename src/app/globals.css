@@ -1514,7 +1514,7 @@ p {
 .metric-editor { position: relative; display: grid; min-width: 0; align-content: start; }
 .metric-editor::after { position: absolute; z-index: 1; top: 9px; right: 9px; width: 6px; height: 6px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); content: ""; pointer-events: none; transform: rotate(45deg); }
 .metric-editor select { position: absolute; z-index: 2; top: 0; left: 0; height: 28px; opacity: 0; cursor: pointer; }
-.metric-selected { display: block; height: 28px; padding: 5px 24px 3px 5px; overflow: hidden; border: 1px solid transparent; border-radius: 4px; font-weight: 650; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
+.metric-selected { display: block; height: 28px; padding: 5px 24px 3px 4px; overflow: hidden; border: 1px solid transparent; border-radius: 4px; font-weight: 650; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; }
 .metric-editor:hover .metric-selected { background: var(--surface); border-color: var(--border); }
 .metric-editor:focus-within .metric-selected { background: var(--surface); border-color: var(--accent); }
 .metric-editor small, .metric-editor em { display: block; min-width: 0; max-width: 100%; margin-top: 2px; padding: 0 5px; overflow: hidden; color: var(--muted); font-size: 9px; font-style: normal; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
