@@ -50,7 +50,7 @@ const IMPORT_SELECT = `
     i.updated_at
     , i.confirmed_at
     , COALESCE(l.collected_at, e.collected_at) AS collected_at
-    , COALESCE(l.laboratory_name, e.laboratory_name) AS laboratory_name
+    , COALESCE(l.laboratory_name, i.laboratory_name_override, e.laboratory_name) AS laboratory_name
     , CASE WHEN l.id IS NULL THEN
         (SELECT COUNT(*) FROM observation_drafts d WHERE d.import_session_id = i.id)
       ELSE
@@ -97,15 +97,15 @@ export function createSqliteImportRepository(
     INSERT INTO import_sessions (
       profile_id, source_document_id, duplicate_of_import_session_id,
       original_file_name, media_type, size_bytes, sha256, status,
-      error_message, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'uploaded', NULL, ?, ?)
+      error_message, laboratory_name_override, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'uploaded', NULL, ?, ?, ?)
   `);
   const insertFailed = database.prepare(`
     INSERT INTO import_sessions (
       profile_id, source_document_id, duplicate_of_import_session_id,
       original_file_name, media_type, size_bytes, sha256, status,
-      error_message, created_at, updated_at
-    ) VALUES (?, NULL, NULL, ?, ?, ?, NULL, 'failed', ?, ?, ?)
+      error_message, laboratory_name_override, created_at, updated_at
+    ) VALUES (?, NULL, NULL, ?, ?, ?, NULL, 'failed', ?, ?, ?, ?)
   `);
 
   return {
@@ -150,6 +150,7 @@ export function createSqliteImportRepository(
           input.mediaType,
           input.sizeBytes,
           input.sha256,
+          input.laboratoryName,
           now,
           now,
         );
@@ -169,6 +170,7 @@ export function createSqliteImportRepository(
         input.mediaType,
         input.sizeBytes,
         input.errorMessage,
+        input.laboratoryName,
         now,
         now,
       );

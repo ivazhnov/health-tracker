@@ -24,25 +24,33 @@ export async function uploadFilesAction(formData: FormData) {
     .filter(
       (entry): entry is File => entry instanceof File && entry.name.length > 0,
     );
+  const laboratoryNames = formData
+    .getAll("laboratoryNames")
+    .map(cleanLaboratoryName);
 
   if (files.length === 0) {
-    redirect(redirectSlug ? `/people/${redirectSlug}/upload?error=no_files` : "/imports/new?error=no_files");
+    redirect(
+      redirectSlug
+        ? `/people/${redirectSlug}/upload?error=no_files`
+        : "/imports/new?error=no_files",
+    );
   }
 
   const batchError = validateBatch(files);
   let uploaded = 0;
   let failed = 0;
 
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
+    const info = fileInfo(file, laboratoryNames[index] ?? null);
     if (batchError) {
-      failImport(profileId, fileInfo(file), batchError);
+      failImport(profileId, info, batchError);
       failed += 1;
       continue;
     }
 
     try {
       const importSessionId = await uploadImport(profileId, {
-        ...fileInfo(file),
+        ...info,
         contents: new Uint8Array(await file.arrayBuffer()),
       });
       if (importSessionId) {
@@ -54,20 +62,31 @@ export async function uploadFilesAction(formData: FormData) {
     } catch {
       failImport(
         profileId,
-        fileInfo(file),
+        info,
         "Не удалось прочитать загруженный файл.",
       );
       failed += 1;
     }
   }
 
-  redirect(redirectSlug ? `/people/${redirectSlug}/analyses?uploaded=${uploaded}&failed=${failed}` : `/imports?uploaded=${uploaded}&failed=${failed}`);
+  redirect(
+    redirectSlug
+      ? `/people/${redirectSlug}/analyses?uploaded=${uploaded}&failed=${failed}`
+      : `/imports?uploaded=${uploaded}&failed=${failed}`,
+  );
 }
 
-function fileInfo(file: File) {
+function fileInfo(file: File, laboratoryName: string | null) {
   return {
     name: file.name,
+    laboratoryName,
     declaredMediaType: file.type,
     size: file.size,
   };
+}
+
+function cleanLaboratoryName(entry: FormDataEntryValue) {
+  if (typeof entry !== "string") return null;
+  const value = entry.normalize("NFKC").trim();
+  return value ? value.slice(0, 200) : null;
 }

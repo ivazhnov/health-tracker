@@ -15,6 +15,7 @@ export function createImportService(
       if (!validation.ok) {
         repository.createFailed({
           profileId,
+          laboratoryName: file.laboratoryName,
           originalFileName: cleanFileName(file.name),
           mediaType: file.declaredMediaType || "application/octet-stream",
           sizeBytes: file.size,
@@ -30,6 +31,7 @@ export function createImportService(
         );
         return repository.createUploaded({
           profileId,
+          laboratoryName: file.laboratoryName,
           originalFileName: cleanFileName(file.name),
           mediaType: validation.value.mediaType,
           sizeBytes: file.size,
@@ -39,6 +41,7 @@ export function createImportService(
       } catch {
         repository.createFailed({
           profileId,
+          laboratoryName: file.laboratoryName,
           originalFileName: cleanFileName(file.name),
           mediaType: validation.value.mediaType,
           sizeBytes: file.size,
@@ -48,9 +51,10 @@ export function createImportService(
       }
     },
 
-    fail(profileId: number, file: Pick<UploadFile, "name" | "declaredMediaType" | "size">, error: string) {
+    fail(profileId: number, file: Pick<UploadFile, "name" | "laboratoryName" | "declaredMediaType" | "size">, error: string) {
       repository.createFailed({
         profileId,
+        laboratoryName: file.laboratoryName,
         originalFileName: cleanFileName(file.name),
         mediaType: file.declaredMediaType || "application/octet-stream",
         sizeBytes: file.size,

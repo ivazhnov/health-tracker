@@ -32,6 +32,7 @@ test("an identical file reuses its source document", () => {
   const repository = createSqliteImportRepository(database);
   const input = {
     profileId: 1,
+    laboratoryName: "Лаборатория вручную",
     originalFileName: "analysis.pdf",
     mediaType: "application/pdf",
     sizeBytes: 128,
@@ -47,6 +48,7 @@ test("an identical file reuses its source document", () => {
 
   assert.equal(sourceCount, 1);
   assert.equal(repository.get(firstId)?.duplicateOfImportSessionId, null);
+  assert.equal(repository.get(firstId)?.laboratoryName, "Лаборатория вручную");
   assert.equal(repository.get(secondId)?.duplicateOfImportSessionId, firstId);
   assert.equal(
     repository.get(firstId)?.sourceDocumentId,

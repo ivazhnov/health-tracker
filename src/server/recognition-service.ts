@@ -21,7 +21,10 @@ export function createRecognitionService(
       const contents = await storage.read(job.storagePath);
       const text = await textExtractor.extract(job.mediaType, contents);
       const draft = await draftExtractor.extract(text, repository.listMetricAliases());
-      repository.complete(importSessionId, draft);
+      repository.complete(importSessionId, {
+        ...draft,
+        laboratoryName: job.laboratoryNameOverride ?? draft.laboratoryName,
+      });
       return true;
     } catch (error) {
       repository.fail(importSessionId, userFacingError(error));

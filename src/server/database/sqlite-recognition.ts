@@ -22,6 +22,7 @@ type JobRow = {
   source_document_id: number;
   storage_path: string;
   media_type: string;
+  laboratory_name_override: string | null;
 };
 
 type ExtractionRow = {
@@ -63,7 +64,8 @@ export function createSqliteRecognitionRepository(
       i.id AS import_session_id,
       d.id AS source_document_id,
       d.storage_path,
-      d.media_type
+      d.media_type,
+      i.laboratory_name_override
     FROM import_sessions i
     JOIN source_documents d ON d.id = i.source_document_id
     WHERE i.id = ?
@@ -246,6 +248,7 @@ function mapJob(row: JobRow): RecognitionJob {
     sourceDocumentId: row.source_document_id,
     storagePath: row.storage_path,
     mediaType: row.media_type,
+    laboratoryNameOverride: row.laboratory_name_override,
   };
 }
 

@@ -3,6 +3,7 @@ export type RecognitionJob = {
   sourceDocumentId: number;
   storagePath: string;
   mediaType: string;
+  laboratoryNameOverride: string | null;
 };
 
 export type MetricAlias = {

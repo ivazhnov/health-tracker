@@ -97,7 +97,7 @@ export function uploadImport(profileId: number, file: UploadFile) {
 
 export function failImport(
   profileId: number,
-  file: Pick<UploadFile, "name" | "declaredMediaType" | "size">,
+  file: Pick<UploadFile, "name" | "laboratoryName" | "declaredMediaType" | "size">,
   error: string,
 ) {
   return importer().fail(profileId, file, error);

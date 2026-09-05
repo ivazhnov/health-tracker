@@ -561,6 +561,14 @@ export const migrations: Migration[] = [
          OR slug GLOB '*[^a-z0-9-]*';
     `,
   },
+  {
+    version: 11,
+    name: "import_laboratory_override",
+    sql: `
+      ALTER TABLE import_sessions
+      ADD COLUMN laboratory_name_override TEXT;
+    `,
+  },
 ];
 
 export function applyMigrations(database: DatabaseSync) {

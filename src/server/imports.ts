@@ -38,6 +38,7 @@ export type SourceDocument = {
 
 export type CreateUploadedImport = {
   profileId: number;
+  laboratoryName: string | null;
   originalFileName: string;
   mediaType: string;
   sizeBytes: number;
@@ -47,6 +48,7 @@ export type CreateUploadedImport = {
 
 export type CreateFailedImport = {
   profileId: number;
+  laboratoryName: string | null;
   originalFileName: string;
   mediaType: string;
   sizeBytes: number;
@@ -68,6 +70,7 @@ export interface DocumentStorage {
 
 export type UploadFile = {
   name: string;
+  laboratoryName: string | null;
   declaredMediaType: string;
   size: number;
   contents: Uint8Array;
