@@ -16,6 +16,7 @@ import { createSqliteRecognitionRepository } from "@/server/database/sqlite-reco
 import { createLocalDocumentStorage } from "@/server/document-storage";
 import { createImportService } from "@/server/import-service";
 import { createLocalDraftExtractor } from "@/server/local-draft-extractor";
+import { createOpenAiDraftExtractor } from "@/server/openai-draft-extractor";
 import { createLocalTextExtractor } from "@/server/local-text-extractor";
 import { createRecognitionService } from "@/server/recognition-service";
 import type { ImportRepository, UploadFile } from "@/server/imports";
@@ -188,7 +189,9 @@ function recogniser() {
       recognition(),
       storage(),
       createLocalTextExtractor(getDataDirectory()),
-      createLocalDraftExtractor(),
+      process.env.OPENAI_API_KEY
+        ? createOpenAiDraftExtractor(process.env.OPENAI_API_KEY, process.env.OPENAI_MODEL || "gpt-4.1")
+        : createLocalDraftExtractor(),
     );
   }
 

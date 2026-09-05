@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { createHash } from "node:crypto";
 import type {
   MetricAlias,
   ObservationDraft,
@@ -55,7 +56,7 @@ export function createSqliteRecognitionRepository(
     SET status = 'extracting', error_message = NULL, updated_at = ?
     WHERE id = ?
       AND source_document_id IS NOT NULL
-      AND status IN ('uploaded', 'failed')
+      AND status IN ('uploaded', 'failed', 'needs_review')
   `);
   const readJob = database.prepare(`
     SELECT
@@ -174,16 +175,30 @@ export function createSqliteRecognitionRepository(
         );
         deleteDrafts.run(importSessionId);
         draft.observations.forEach((item, index) => {
+          let metricId = item.metricDefinitionId;
+          // Catalogue proposals are labels only; no medical result is confirmed here.
+          if (metricId === null && draft.recognitionVersion.startsWith("openai-") && item.displayName && item.category) {
+            const key = "ai_" + createHash("sha256").update(
+              item.displayName.normalize("NFKC").trim().toLocaleLowerCase(),
+            ).digest("hex");
+            database.prepare(`INSERT OR IGNORE INTO metric_definitions
+              (key, display_name, category, default_unit) VALUES (?, ?, ?, ?)`)
+              .run(key, item.displayName, item.category, item.unit);
+            metricId = (database.prepare("SELECT id FROM metric_definitions WHERE key = ?").get(key) as { id: number }).id;
+            database.prepare(`INSERT OR IGNORE INTO metric_aliases
+              (metric_definition_id, language, alias) VALUES (?, 'ru', ?)`)
+              .run(metricId, item.displayName);
+          }
           insertDraft.run(
             importSessionId,
-            item.metricDefinitionId,
+            metricId,
             item.originalName,
             item.valueText,
             item.unit,
             item.referenceLow,
             item.referenceHigh,
             item.referenceText,
-            item.confidence,
+            item.metricDefinitionId === null ? Math.min(item.confidence, 0.8) : item.confidence,
             item.sourceText,
             index,
             now,

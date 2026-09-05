@@ -86,10 +86,10 @@ export default async function ImportPage({
               </a>
             ) : null}
             {item.sourceDocumentId &&
-            (item.status === "uploaded" || item.status === "failed") ? (
+            (item.status === "uploaded" || item.status === "failed" || item.status === "needs_review") ? (
               <form action={retryAction}>
                 <button className="primary-button" type="submit">
-                  {item.status === "failed" ? "Попробовать снова" : "Распознать"}
+                  {item.status === "needs_review" ? "Распознать заново" : item.status === "failed" ? "Попробовать снова" : "Распознать"}
                 </button>
               </form>
             ) : null}
@@ -122,6 +122,10 @@ export default async function ImportPage({
 
       {draft && item.status === "needs_review" && item.sourceDocumentId ? (
         <>
+          <p className="notice">
+            {process.env.OPENAI_API_KEY ? "AI-разбор включён." : "Локальный разбор. Для AI-сопоставления добавьте OPENAI_API_KEY в настройки сервера."}
+            {" "}Повторное распознавание заменяет черновик и несохранённые правки.
+          </p>
           {draft.warnings.length ? (
             <section className="warning-list">
               {draft.warnings.map((warning) => (
@@ -136,6 +140,7 @@ export default async function ImportPage({
               sourceDocumentId={item.sourceDocumentId}
             />
             <ReviewForm
+              key={`${draft.recognitionVersion}-${item.updatedAt}`}
               draft={draft}
               importSessionId={item.id}
               metrics={metrics}

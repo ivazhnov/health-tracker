@@ -20,7 +20,7 @@ export function createRecognitionService(
     try {
       const contents = await storage.read(job.storagePath);
       const text = await textExtractor.extract(job.mediaType, contents);
-      const draft = draftExtractor.extract(text, repository.listMetricAliases());
+      const draft = await draftExtractor.extract(text, repository.listMetricAliases());
       repository.complete(importSessionId, draft);
       return true;
     } catch (error) {

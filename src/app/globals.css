@@ -734,7 +734,7 @@ a {
 
 .review-workspace {
   display: grid;
-  grid-template-columns: minmax(320px, 0.85fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 20px;
 }
@@ -798,6 +798,16 @@ a {
   gap: 18px;
   margin-top: 30px;
 }
+
+.review-table { min-width: 1080px; }
+.review-table td { vertical-align: top; padding: 8px 5px; }
+.review-table input, .review-table select {
+  width: 100%; min-width: 80px; padding: 9px;
+  border: 1px solid var(--border); border-radius: 6px; background: white;
+}
+.review-table td:nth-child(1), .review-table td:nth-child(2) { min-width: 225px; }
+.review-table small { display: block; color: var(--muted); margin-top: 5px; }
+.review-table .unmapped-row { background: #fff8dd; }
 
 .review-form .content-card {
   margin-top: 0;

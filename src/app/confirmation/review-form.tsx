@@ -15,6 +15,7 @@ type ReviewFormProps = {
 };
 
 type ReviewRow = {
+  needsReview: boolean;
   key: number;
   metricDefinitionId: number | null;
   originalName: string;
@@ -38,6 +39,7 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
   });
   const [rows, setRows] = useState<ReviewRow[]>(() =>
     draft.observations.map((observation, key) => ({
+      needsReview: observation.confidence < 0.85,
       key,
       metricDefinitionId: observation.metricDefinitionId,
       originalName: observation.originalName,
@@ -62,6 +64,7 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
       ...current,
       {
         key,
+        needsReview: true,
         metricDefinitionId: null,
         originalName: "",
         valueText: "",
@@ -162,123 +165,40 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
         </div>
       </section>
 
-      <div className="review-rows">
-        {rows.map((row, index) => (
-          <fieldset className="content-card review-row" key={row.key}>
-            <legend>Показатель {index + 1}</legend>
-            <button
-              className="remove-row-button"
-              onClick={() => removeRow(row.key)}
-              type="button"
-            >
-              Удалить
-            </button>
-
-            <div className="form-grid two-columns">
-              <label className="field wide-field">
-                <span>Показатель</span>
-                <select
-                  name="metricDefinitionId"
-                  onChange={(event) =>
-                    updateRow(
-                      row.key,
-                      "metricDefinitionId",
-                      event.target.value ? Number(event.target.value) : null,
-                    )
-                  }
-                  required
-                  value={row.metricDefinitionId ?? ""}
-                >
-                  <option disabled value="">
-                    Выберите из каталога
-                  </option>
-                  {metrics.map((metric) => (
-                    <option key={metric.id} value={metric.id}>
-                      {metric.category} · {metric.displayName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field wide-field">
-                <span>Название в документе</span>
-                <input
-                  maxLength={200}
-                  name="originalName"
-                  onChange={(event) =>
-                    updateRow(row.key, "originalName", event.target.value)
-                  }
-                  required
-                  value={row.originalName}
-                />
-              </label>
-              <label className="field">
-                <span>Значение</span>
-                <input
-                  inputMode="decimal"
-                  name="valueText"
-                  onChange={(event) =>
-                    updateRow(row.key, "valueText", event.target.value)
-                  }
-                  placeholder="Например, 3,1 или &lt;5"
-                  required
-                  value={row.valueText}
-                />
-              </label>
-              <label className="field">
-                <span>Единица</span>
-                <input
-                  maxLength={50}
-                  name="unit"
-                  onChange={(event) =>
-                    updateRow(row.key, "unit", event.target.value)
-                  }
-                  value={row.unit}
-                />
-              </label>
-              <label className="field">
-                <span>Референс от</span>
-                <input
-                  inputMode="decimal"
-                  name="referenceLow"
-                  onChange={(event) =>
-                    updateRow(row.key, "referenceLow", event.target.value)
-                  }
-                  value={row.referenceLow}
-                />
-              </label>
-              <label className="field">
-                <span>Референс до</span>
-                <input
-                  inputMode="decimal"
-                  name="referenceHigh"
-                  onChange={(event) =>
-                    updateRow(row.key, "referenceHigh", event.target.value)
-                  }
-                  value={row.referenceHigh}
-                />
-              </label>
-              <label className="field wide-field">
-                <span>Референс текстом</span>
-                <input
-                  maxLength={200}
-                  name="referenceText"
-                  onChange={(event) =>
-                    updateRow(row.key, "referenceText", event.target.value)
-                  }
-                  placeholder="Например, отрицательно или &lt;5"
-                  value={row.referenceText}
-                />
-              </label>
-            </div>
-            <input
-              name="sourceText"
-              readOnly
-              type="hidden"
-              value={row.sourceText}
-            />
-          </fieldset>
-        ))}
-      </div>
+      <section className="content-card review-table-card">
+        <h2>Показатели</h2>
+        <p className="muted-copy">Исправляйте данные прямо в ячейках. Показатель — единое название в каталоге, группа — его категория.</p>
+        <div className="table-wrap">
+          <table className="review-table">
+            <thead><tr>
+              <th scope="col">Название в документе</th>
+              <th scope="col">Показатель / группа</th>
+              <th scope="col">Значение</th><th scope="col">Единица</th>
+              <th scope="col">Референс от</th><th scope="col">До</th>
+              <th scope="col">Референс текстом</th><th scope="col">Действия</th>
+            </tr></thead>
+            <tbody>{rows.map((row, index) => (
+              <tr key={row.key} className={row.metricDefinitionId === null || row.needsReview ? "unmapped-row" : undefined}>
+                <td><input aria-label={`Название в документе, строка ${index + 1}`} name="originalName" required maxLength={200} value={row.originalName} onChange={(event) => updateRow(row.key, "originalName", event.target.value)} />
+                  <input name="sourceText" type="hidden" value={row.sourceText} readOnly />
+                </td>
+                <td><select aria-label={`Показатель, строка ${index + 1}`} name="metricDefinitionId" required value={row.metricDefinitionId ?? ""} onChange={(event) => updateRow(row.key, "metricDefinitionId", event.target.value ? Number(event.target.value) : null)}>
+                  <option value="">Не сопоставлен</option>
+                  {metrics.map((metric) => <option key={metric.id} value={metric.id}>{metric.displayName}</option>)}
+                </select><small>{metrics.find((metric) => metric.id === row.metricDefinitionId)?.category ?? "Нужно сопоставить"}</small></td>
+                {(["valueText", "unit", "referenceLow", "referenceHigh", "referenceText"] as const).map((field) => (
+                  <td key={field}><input
+                    aria-label={`${({valueText: "Значение", unit: "Единица", referenceLow: "Референс от", referenceHigh: "Референс до", referenceText: "Референс текстом"})[field]}, строка ${index + 1}`}
+                    name={field} value={row[field]} required={field === "valueText"}
+                    onChange={(event) => updateRow(row.key, field, event.target.value)}
+                  /></td>
+                ))}
+                <td><button className="text-button" aria-label={`Удалить строку ${index + 1}`} onClick={() => removeRow(row.key)} type="button">Удалить</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </section>
 
       <button className="secondary-button add-row-button" onClick={addRow} type="button">
         + Добавить показатель

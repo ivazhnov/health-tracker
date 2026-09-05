@@ -57,5 +57,5 @@ export interface TextExtractor {
 }
 
 export interface DraftExtractor {
-  extract(text: string, aliases: MetricAlias[]): RecognitionDraft;
+  extract(text: string, aliases: MetricAlias[]): RecognitionDraft | Promise<RecognitionDraft>;
 }

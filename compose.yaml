@@ -6,6 +6,8 @@ services:
       APP_PASSWORD_HASH: ${APP_PASSWORD_HASH:?Configure APP_PASSWORD_HASH in .env}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       DATA_DIR: /data
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1}
       SESSION_SECRET: ${SESSION_SECRET:?Configure SESSION_SECRET in .env}
     ports:
       - "127.0.0.1:3000:3000"
