@@ -12,8 +12,9 @@ export function MetricChart({
   compact?: boolean;
 }) {
   const units = new Set(points.map((point) => point.unit));
-  if (units.size > 1) {
-    return <p className="muted-copy">Разные единицы измерения — сравните значения в истории.</p>;
+  const materials = new Set(points.map((point) => point.specimen?.trim().toLocaleLowerCase() ?? ""));
+  if (units.size > 1 || materials.size > 1) {
+    return <p className="muted-copy">Разные единицы или материалы — сравните значения в истории.</p>;
   }
   const width = compact ? 320 : 760;
   const height = compact ? 110 : 280;

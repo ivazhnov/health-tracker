@@ -271,6 +271,7 @@ function mapProfileMetric(
 
 function mapPoint(row: ObservationRow): MetricPoint {
   return {
+    specimen: row.specimen,
     observationId: row.observation_id,
     collectedAt: row.collected_at,
     valueNumeric: row.value_numeric,

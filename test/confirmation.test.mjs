@@ -258,6 +258,27 @@ test("the same metric in a different material stays in a separate session", () =
   assert.equal(count(database, "lab_sessions"), 2);
 });
 
+test("repeated reports select the session with the matching material", () => {
+  const database = createDatabase();
+  const service = createConfirmationService(createSqliteConfirmationRepository(database));
+  const first = confirmationInput();
+  assert.equal(service.confirm(first).ok, true);
+  addImport(database, 2);
+  const second = confirmationInput(2);
+  second.specimen = "Моча";
+  assert.equal(service.confirm(second).ok, true);
+  addImport(database, 3);
+  const repeat = confirmationInput(3);
+  repeat.specimen = "Моча";
+  const result = service.confirm(repeat);
+  assert.equal(result.ok, true);
+  assert.equal(result.summary.outcome, "merged");
+  assert.equal(result.labSessionId, 2);
+  assert.equal(count(database, "lab_sessions"), 2);
+  assert.equal(count(database, "observations"), 4);
+  assert.equal(count(database, "observation_sources"), 6);
+});
+
 test("migration 6 backfills sources for stage 5 confirmations", () => {
   const database = createDatabase(5);
   const now = new Date().toISOString();

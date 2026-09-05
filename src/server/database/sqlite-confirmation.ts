@@ -29,6 +29,7 @@ type ImportRow = {
 type CandidateRow = {
   id: number;
   laboratory_name: string | null;
+  specimen: string | null;
 };
 
 type LabSessionRow = {
@@ -100,7 +101,7 @@ export function createSqliteConfirmationRepository(
     WHERE import_session_id = ?
   `);
   const readCandidates = database.prepare(`
-    SELECT id, laboratory_name
+    SELECT id, laboratory_name, specimen
     FROM lab_sessions
     WHERE profile_id = ? AND collected_at = ?
     ORDER BY id
@@ -228,6 +229,7 @@ export function createSqliteConfirmationRepository(
             input.collectedAt,
           ) as CandidateRow[],
           input.laboratoryName,
+          input.specimen,
         );
         const existing = candidate
           ? (readExistingObservations.all(candidate.id) as ObservationRow[])
@@ -400,13 +402,16 @@ export function createSqliteConfirmationRepository(
 function findCandidate(
   candidates: CandidateRow[],
   laboratoryName: string | null,
+  specimen: string | null,
 ) {
   const normalized = normalizeDeduplicationText(laboratoryName);
   if (!normalized) return null;
   return (
     candidates.find(
       (candidate) =>
-        normalizeDeduplicationText(candidate.laboratory_name) === normalized,
+        normalizeDeduplicationText(candidate.laboratory_name) === normalized &&
+        normalizeDeduplicationText(candidate.specimen) ===
+          normalizeDeduplicationText(specimen),
     ) ?? null
   );
 }

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { DatabaseSync } from "node:sqlite";
-import { buildChartGeometry } from "../src/app/metrics/chart-geometry.ts";
+import { buildChartGeometry, isOutsideReference } from "../src/app/metrics/chart-geometry.ts";
 import {
   createSqliteFavoriteMetricCommandRepository,
   createSqliteMetricHistoryQueryRepository,
@@ -66,6 +66,24 @@ test("chart geometry handles one point and equal values", () => {
   const equal = buildChartGeometry([point(1, 3.1), point(2, 3.1)], 760, 280, 28);
   assert.equal(equal.points[0].y, equal.points[1].y);
   assert.ok(equal.max > equal.min);
+});
+
+test("chart spacing follows calendar dates rather than observation count", () => {
+  const points = [point(1, 2), point(2, 3), point(3, 4)];
+  points[0].collectedAt = "2025-01-01";
+  points[1].collectedAt = "2025-01-02";
+  points[2].collectedAt = "2025-01-11";
+  const chart = buildChartGeometry(points, 120, 100, 10);
+  assert.deepEqual(chart.points.map(({ x }) => x), [10, 20, 110]);
+});
+
+test("a reporting threshold is not classified as an exact out-of-range result", () => {
+  const measurement = point(1, 5);
+  measurement.referenceHigh = 3;
+  assert.equal(isOutsideReference(measurement), true);
+  measurement.comparator = "<";
+  measurement.valueText = "<5";
+  assert.equal(isOutsideReference(measurement), false);
 });
 
 function createDatabase() {

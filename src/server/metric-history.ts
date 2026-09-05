@@ -1,4 +1,5 @@
 export type MetricPoint = {
+  specimen: string | null;
   observationId: number;
   collectedAt: string;
   valueNumeric: number;
