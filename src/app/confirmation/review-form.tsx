@@ -336,6 +336,9 @@ export function ReviewForm({
                             </option>
                           ))}
                         </select>
+                        <span className="metric-selected" aria-hidden="true">
+                          {metric?.displayName ?? "Не сопоставлен"}
+                        </span>
                         <small title={row.originalName}>{row.originalName}</small>
                         <em>{metric?.category ?? "Нужно сопоставить"}</em>
                       </div>
