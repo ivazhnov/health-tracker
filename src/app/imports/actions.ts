@@ -13,6 +13,7 @@ import {
 export async function uploadFilesAction(formData: FormData) {
   await requireSession();
   const profileId = Number(formData.get("profileId"));
+  const redirectSlug = String(formData.get("redirectSlug") ?? "");
 
   if (!Number.isInteger(profileId) || !getProfile(profileId)) {
     redirect("/");
@@ -25,7 +26,7 @@ export async function uploadFilesAction(formData: FormData) {
     );
 
   if (files.length === 0) {
-    redirect("/imports/new?error=no_files");
+    redirect(redirectSlug ? `/people/${redirectSlug}/upload?error=no_files` : "/imports/new?error=no_files");
   }
 
   const batchError = validateBatch(files);
@@ -60,7 +61,7 @@ export async function uploadFilesAction(formData: FormData) {
     }
   }
 
-  redirect(`/imports?uploaded=${uploaded}&failed=${failed}`);
+  redirect(redirectSlug ? `/people/${redirectSlug}/analyses?uploaded=${uploaded}&failed=${failed}` : `/imports?uploaded=${uploaded}&failed=${failed}`);
 }
 
 function fileInfo(file: File) {

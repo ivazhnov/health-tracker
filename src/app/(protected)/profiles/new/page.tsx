@@ -1,6 +1,7 @@
 import { createProfileAction } from "@/app/profiles/actions";
 import { ProfileForm } from "@/app/profiles/profile-form";
 import { listProfiles } from "@/server/services";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 type NewProfileProps = {
@@ -15,16 +16,20 @@ export default async function NewProfile({ searchParams }: NewProfileProps) {
   const { error } = await searchParams;
 
   return (
-    <main className="form-page">
-      <p className="eyebrow">Новый профиль</p>
-      <h1>Добавить человека</h1>
-      <p className="lead small">
-        Эти данные помогут правильно связать анализы и референсы.
-      </p>
+    <main className="standalone-page compact-form-page">
+      <header className="global-header">
+        <Link className="product-name" href="/">Семейный архив здоровья</Link>
+      </header>
+      <div className="page-heading">
+        <div>
+          <h1>Добавить человека</h1>
+          <p>Данные нужны для привязки анализов и возрастных референсов.</p>
+        </div>
+      </div>
       {error ? (
         <p className="notice error">Проверьте заполненные поля.</p>
       ) : null}
-      <ProfileForm action={createProfileAction} />
+      <ProfileForm action={createProfileAction} cancelHref="/people" />
     </main>
   );
 }

@@ -20,6 +20,10 @@ type ImportRow = {
   error_message: string | null;
   created_at: string;
   updated_at: string;
+  confirmed_at: string | null;
+  collected_at: string | null;
+  laboratory_name: string | null;
+  observation_count: number;
 };
 
 type DocumentRow = {
@@ -44,8 +48,19 @@ const IMPORT_SELECT = `
     i.error_message,
     i.created_at,
     i.updated_at
+    , i.confirmed_at
+    , COALESCE(l.collected_at, e.collected_at) AS collected_at
+    , COALESCE(l.laboratory_name, e.laboratory_name) AS laboratory_name
+    , CASE WHEN l.id IS NULL THEN
+        (SELECT COUNT(*) FROM observation_drafts d WHERE d.import_session_id = i.id)
+      ELSE
+        (SELECT COUNT(*) FROM confirmed_observations o WHERE o.lab_session_id = l.id)
+      END AS observation_count
   FROM import_sessions i
   JOIN profiles p ON p.id = i.profile_id
+  LEFT JOIN import_extractions e ON e.import_session_id = i.id
+  LEFT JOIN import_confirmation_results r ON r.import_session_id = i.id
+  LEFT JOIN lab_sessions l ON l.id = r.lab_session_id
 `;
 
 export function createSqliteImportRepository(
@@ -177,6 +192,10 @@ function mapImport(row: ImportRow): ImportSession {
     errorMessage: row.error_message,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    confirmedAt: row.confirmed_at,
+    collectedAt: row.collected_at,
+    laboratoryName: row.laboratory_name,
+    observationCount: row.observation_count,
   };
 }
 

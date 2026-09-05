@@ -527,6 +527,40 @@ export const migrations: Migration[] = [
         reference_high, reference_text, source_text, created_at FROM observation_sources;
     `,
   },
+  {
+    version: 9,
+    name: "person_slugs_and_medical_categories",
+    sql: `
+      ALTER TABLE profiles ADD COLUMN slug TEXT;
+      UPDATE profiles
+      SET slug = lower(trim(first_name)) || '-' || id;
+      CREATE UNIQUE INDEX profiles_slug ON profiles (slug);
+
+      UPDATE metric_definitions SET category = CASE category
+        WHEN 'Кровь' THEN 'Общий анализ крови'
+        WHEN 'Почки' THEN 'Почки и мочевыделительная система'
+        WHEN 'Печень' THEN 'Печень и желчевыводящая система'
+        WHEN 'Липиды' THEN 'Липиды и сердечно-сосудистый риск'
+        WHEN 'Обмен веществ' THEN 'Глюкоза и обмен веществ'
+        WHEN 'Иммунология' THEN 'Иммунология и иммуноглобулины'
+        WHEN 'Иммуноглобулины' THEN 'Иммунология и иммуноглобулины'
+        WHEN 'Автоантитела' THEN 'Аутоиммунные маркеры'
+        WHEN 'Вирусные инфекции' THEN 'Инфекции и серология'
+        ELSE category
+      END;
+    `,
+  },
+  {
+    version: 10,
+    name: "url_safe_person_slugs",
+    sql: `
+      UPDATE profiles
+      SET slug = 'person-' || id
+      WHERE slug IS NULL
+         OR slug = ''
+         OR slug GLOB '*[^a-z0-9-]*';
+    `,
+  },
 ];
 
 export function applyMigrations(database: DatabaseSync) {

@@ -9,6 +9,7 @@ export type BodyMeasurement = {
 
 export type Profile = {
   id: number;
+  slug: string;
   firstName: string;
   lastName: string;
   dateOfBirth: string;
@@ -41,8 +42,19 @@ export type CreateProfileResult =
 export interface ProfileRepository {
   list(): Profile[];
   get(profileId: number): ProfileDetails | null;
+  getBySlug(slug: string): ProfileDetails | null;
   create(input: SaveProfileInput): CreateProfileResult;
   update(profileId: number, input: SaveProfileInput): boolean;
+  addMeasurement(profileId: number, measurement: SaveProfileInput["measurement"]): boolean;
+}
+
+export function parseMeasurementForm(formData: FormData) {
+  const measuredAt = text(formData, "measuredAt");
+  const heightCm = optionalPositiveNumber(formData, "heightCm");
+  const weightKg = optionalPositiveNumber(formData, "weightKg");
+  if (!isPastOrToday(measuredAt) || heightCm === "invalid" || weightKg === "invalid" ||
+      (heightCm === null && weightKg === null)) return null;
+  return { measuredAt, heightCm, weightKg };
 }
 
 export type ParsedProfileForm =

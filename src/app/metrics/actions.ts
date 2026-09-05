@@ -49,7 +49,13 @@ function validIds(profileId: number, metricId: number) {
 }
 
 function refresh(profileId: number, metricId: number) {
+  const profile = getProfile(profileId);
   revalidatePath("/");
   revalidatePath(`/profiles/${profileId}/metrics`);
   revalidatePath(`/profiles/${profileId}/metrics/${metricId}`);
+  if (profile) {
+    revalidatePath(`/people/${profile.slug}`);
+    revalidatePath(`/people/${profile.slug}/indicators`);
+    revalidatePath(`/people/${profile.slug}/indicators`, "layout");
+  }
 }

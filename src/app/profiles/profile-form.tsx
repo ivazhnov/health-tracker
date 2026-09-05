@@ -3,10 +3,15 @@ import type { ProfileDetails } from "@/server/profiles";
 
 type ProfileFormProps = {
   action: (formData: FormData) => void | Promise<void>;
+  cancelHref?: string;
   profile?: ProfileDetails;
 };
 
-export function ProfileForm({ action, profile }: ProfileFormProps) {
+export function ProfileForm({
+  action,
+  cancelHref = "/",
+  profile,
+}: ProfileFormProps) {
   return (
     <form action={action} className="profile-form">
       <div className="form-grid">
@@ -38,7 +43,7 @@ export function ProfileForm({ action, profile }: ProfileFormProps) {
           />
         </label>
         <label className="field">
-          <span>Пол при рождении</span>
+          <span>Пол</span>
           <select
             defaultValue={profile?.sexAtBirth ?? ""}
             name="sexAtBirth"
@@ -64,31 +69,8 @@ export function ProfileForm({ action, profile }: ProfileFormProps) {
         />
       </label>
 
-      <fieldset className="measurement-fieldset">
-        <legend>{profile ? "Новое измерение" : "Рост и вес"}</legend>
-        <p>
-          {profile
-            ? "Заполните, только если хотите добавить или обновить измерение."
-            : "Можно заполнить сейчас или добавить позже."}
-        </p>
-        <div className="form-grid three-columns">
-          <label className="field">
-            <span>Дата</span>
-            <input defaultValue={today()} max={today()} name="measuredAt" type="date" />
-          </label>
-          <label className="field">
-            <span>Рост, см</span>
-            <input min="0.1" name="heightCm" step="0.1" type="number" />
-          </label>
-          <label className="field">
-            <span>Вес, кг</span>
-            <input min="0.1" name="weightKg" step="0.1" type="number" />
-          </label>
-        </div>
-      </fieldset>
-
       <div className="form-actions">
-        <Link className="secondary-button" href="/">
+        <Link className="secondary-button" href={cancelHref}>
           Отмена
         </Link>
         <button className="primary-button" type="submit">

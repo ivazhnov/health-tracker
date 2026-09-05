@@ -23,6 +23,10 @@ export type ImportSession = {
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
+  confirmedAt: string | null;
+  collectedAt: string | null;
+  laboratoryName: string | null;
+  observationCount: number;
 };
 
 export type SourceDocument = {

@@ -47,7 +47,8 @@ export async function confirmImportAction(
   revalidatePath(`/imports/${importSessionId}`);
   revalidatePath("/imports");
   revalidatePath("/");
-  redirect(`/imports/${importSessionId}?confirmed=1`);
+  const returnTo = text(formData, "returnTo");
+  redirect(returnTo.startsWith("/people/") ? `${returnTo}?confirmed=1` : `/imports/${importSessionId}?confirmed=1`);
 }
 
 function conflictResolutions(formData: FormData) {

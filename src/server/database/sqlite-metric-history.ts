@@ -16,6 +16,7 @@ type MetricRow = {
   default_unit: string | null;
   observation_count: number;
   favorite_order: number | null;
+  search_terms: string;
 };
 
 type ObservationRow = {
@@ -60,6 +61,8 @@ export function createSqliteMetricHistoryQueryRepository(
       m.id, m.key, m.display_name, m.category, m.default_unit,
       COUNT(o.id) AS observation_count,
       f.sort_order AS favorite_order
+      , COALESCE((SELECT group_concat(a.alias, ' ') FROM metric_aliases a
+          WHERE a.metric_definition_id = m.id), '') AS search_terms
     FROM metric_definitions m
     JOIN confirmed_observations o ON o.metric_definition_id = m.id
     JOIN lab_sessions l ON l.id = o.lab_session_id AND l.profile_id = ?
@@ -70,7 +73,9 @@ export function createSqliteMetricHistoryQueryRepository(
   `);
   const readMetric = database.prepare(`
     SELECT id, key, display_name, category, default_unit,
-      0 AS observation_count, NULL AS favorite_order
+      0 AS observation_count, NULL AS favorite_order,
+      COALESCE((SELECT group_concat(a.alias, ' ') FROM metric_aliases a
+        WHERE a.metric_definition_id = metric_definitions.id), '') AS search_terms
     FROM metric_definitions
     WHERE id = ? AND EXISTS (
       SELECT 1
@@ -266,6 +271,7 @@ function mapProfileMetric(
     latest: points.at(-1)!,
     favoriteOrder: metric.favorite_order,
     points,
+    searchTerms: metric.search_terms,
   };
 }
 

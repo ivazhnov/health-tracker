@@ -63,12 +63,20 @@ export function getProfile(profileId: number) {
   return profiles().get(profileId);
 }
 
+export function getProfileBySlug(slug: string) {
+  return profiles().getBySlug(slug);
+}
+
 export function createProfile(input: SaveProfileInput) {
   return profiles().create(input);
 }
 
 export function updateProfile(profileId: number, input: SaveProfileInput) {
   return profiles().update(profileId, input);
+}
+
+export function addBodyMeasurement(profileId: number, measurement: SaveProfileInput["measurement"]) {
+  return profiles().addMeasurement(profileId, measurement);
 }
 
 export function listImports(profileId?: number) {

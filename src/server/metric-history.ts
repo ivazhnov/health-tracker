@@ -21,6 +21,7 @@ export type ProfileMetric = {
   latest: MetricPoint;
   favoriteOrder: number | null;
   points: MetricPoint[];
+  searchTerms: string;
 };
 
 export type ProfileArchiveStats = {

@@ -10,6 +10,7 @@ import type {
 
 type ProfileRow = {
   id: number;
+  slug: string;
   first_name: string;
   last_name: string;
   date_of_birth: string;
@@ -31,6 +32,7 @@ type MeasurementRow = {
 const PROFILE_SELECT = `
   SELECT
     p.id,
+    p.slug,
     p.first_name,
     p.last_name,
     p.date_of_birth,
@@ -55,6 +57,7 @@ export function createSqliteProfileRepository(
 ): ProfileRepository {
   const listProfiles = database.prepare(`${PROFILE_SELECT} ORDER BY p.id`);
   const getProfile = database.prepare(`${PROFILE_SELECT} WHERE p.id = ?`);
+  const getProfileBySlug = database.prepare(`${PROFILE_SELECT} WHERE p.slug = ?`);
   const getMeasurements = database.prepare(`
     SELECT id, measured_at, height_cm, weight_kg
     FROM body_measurements
@@ -70,6 +73,7 @@ export function createSqliteProfileRepository(
       created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
   `);
+  const saveSlug = database.prepare("UPDATE profiles SET slug = ? WHERE id = ?");
   const updateProfile = database.prepare(`
     UPDATE profiles
     SET first_name = ?, last_name = ?, date_of_birth = ?,
@@ -103,6 +107,15 @@ export function createSqliteProfileRepository(
       };
     },
 
+    getBySlug(slug) {
+      const row = getProfileBySlug.get(slug) as ProfileRow | undefined;
+      if (!row) return null;
+      return {
+        ...mapProfile(row),
+        measurements: (getMeasurements.all(row.id) as MeasurementRow[]).map(mapMeasurement),
+      };
+    },
+
     create(input): CreateProfileResult {
       database.exec("BEGIN IMMEDIATE");
       try {
@@ -123,7 +136,8 @@ export function createSqliteProfileRepository(
           now,
         );
         const profileId = Number(result.lastInsertRowid);
-        writeMeasurement(saveMeasurement, profileId, input, now);
+        saveSlug.run(profileSlug(input.firstName, profileId), profileId);
+        writeMeasurement(saveMeasurement, profileId, input.measurement, now);
         database.exec("COMMIT");
         return { ok: true, profileId };
       } catch (error) {
@@ -151,7 +165,7 @@ export function createSqliteProfileRepository(
           return false;
         }
 
-        writeMeasurement(saveMeasurement, profileId, input, now);
+        writeMeasurement(saveMeasurement, profileId, input.measurement, now);
         database.exec("COMMIT");
         return true;
       } catch (error) {
@@ -159,24 +173,34 @@ export function createSqliteProfileRepository(
         throw error;
       }
     },
+    addMeasurement(profileId, measurement) {
+      if (!measurement || !getProfile.get(profileId)) return false;
+      writeMeasurement(
+        saveMeasurement,
+        profileId,
+        measurement,
+        new Date().toISOString(),
+      );
+      return true;
+    },
   };
 }
 
 function writeMeasurement(
   statement: ReturnType<DatabaseSync["prepare"]>,
   profileId: number,
-  input: SaveProfileInput,
+  measurement: SaveProfileInput["measurement"],
   createdAt: string,
 ) {
-  if (!input.measurement) {
+  if (!measurement) {
     return;
   }
 
   statement.run(
     profileId,
-    input.measurement.measuredAt,
-    input.measurement.heightCm,
-    input.measurement.weightKg,
+    measurement.measuredAt,
+    measurement.heightCm,
+    measurement.weightKg,
     createdAt,
   );
 }
@@ -184,6 +208,7 @@ function writeMeasurement(
 function mapProfile(row: ProfileRow): Profile {
   return {
     id: row.id,
+    slug: row.slug,
     firstName: row.first_name,
     lastName: row.last_name,
     dateOfBirth: row.date_of_birth,
@@ -208,4 +233,27 @@ function mapMeasurement(row: MeasurementRow): BodyMeasurement {
     heightCm: row.height_cm,
     weightKg: row.weight_kg,
   };
+}
+
+function profileSlug(firstName: string, profileId: number) {
+  const name = transliterate(firstName)
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+  return `${name || "person"}-${profileId}`;
+}
+
+function transliterate(value: string) {
+  const letters: Record<string, string> = {
+    а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "yo",
+    ж: "zh", з: "z", и: "i", й: "y", к: "k", л: "l", м: "m",
+    н: "n", о: "o", п: "p", р: "r", с: "s", т: "t", у: "u",
+    ф: "f", х: "h", ц: "ts", ч: "ch", ш: "sh", щ: "sch",
+    ъ: "", ы: "y", ь: "", э: "e", ю: "yu", я: "ya",
+  };
+  return [...value.toLocaleLowerCase("ru-RU")]
+    .map((letter) => letters[letter] ?? letter)
+    .join("");
 }

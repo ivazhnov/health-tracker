@@ -12,6 +12,7 @@ type ReviewFormProps = {
   importSessionId: number;
   draft: StoredRecognitionDraft;
   metrics: MetricDefinitionOption[];
+  returnTo?: string;
 };
 
 type ReviewRow = {
@@ -30,7 +31,7 @@ type ReviewRow = {
 
 const INITIAL_STATE: ConfirmationActionState = { error: null, conflicts: [] };
 
-export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps) {
+export function ReviewForm({ importSessionId, draft, metrics, returnTo }: ReviewFormProps) {
   const nextKey = useRef(draft.observations.length);
   const [metadata, setMetadata] = useState({
     collectedAt: draft.collectedAt ?? "",
@@ -104,6 +105,7 @@ export function ReviewForm({ importSessionId, draft, metrics }: ReviewFormProps)
 
   return (
     <form action={formAction} className="review-form">
+      {returnTo ? <input name="returnTo" type="hidden" value={returnTo} /> : null}
       <section className="content-card review-metadata">
         <div className="recent-imports-heading">
           <div>
