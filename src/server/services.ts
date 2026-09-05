@@ -7,6 +7,10 @@ import {
 } from "@/server/database/sqlite";
 import { createSqliteConfirmationRepository } from "@/server/database/sqlite-confirmation";
 import { createSqliteImportRepository } from "@/server/database/sqlite-imports";
+import {
+  createSqliteFavoriteMetricCommandRepository,
+  createSqliteMetricHistoryQueryRepository,
+} from "@/server/database/sqlite-metric-history";
 import { createSqliteProfileRepository } from "@/server/database/sqlite-profiles";
 import { createSqliteRecognitionRepository } from "@/server/database/sqlite-recognition";
 import { createLocalDocumentStorage } from "@/server/document-storage";
@@ -15,6 +19,10 @@ import { createLocalDraftExtractor } from "@/server/local-draft-extractor";
 import { createLocalTextExtractor } from "@/server/local-text-extractor";
 import { createRecognitionService } from "@/server/recognition-service";
 import type { ImportRepository, UploadFile } from "@/server/imports";
+import type {
+  FavoriteMetricCommandRepository,
+  MetricHistoryQueryRepository,
+} from "@/server/metric-history";
 import type {
   ConfirmationRepository,
   ConfirmImportInput,
@@ -34,6 +42,8 @@ let recognitionService: ReturnType<typeof createRecognitionService> | null =
 let confirmationRepository: ConfirmationRepository | null = null;
 let confirmationService: ReturnType<typeof createConfirmationService> | null =
   null;
+let metricHistoryRepository: MetricHistoryQueryRepository | null = null;
+let favoriteMetricRepository: FavoriteMetricCommandRepository | null = null;
 
 export function getApplicationStatus() {
   if (!applicationStatusQuery) {
@@ -108,6 +118,34 @@ export function getConfirmedLabSession(importSessionId: number) {
   return confirmations().getConfirmed(importSessionId);
 }
 
+export function getProfileArchiveStats(profileId: number) {
+  return metricHistory().getArchiveStats(profileId);
+}
+
+export function listProfileMetrics(profileId: number) {
+  return metricHistory().listProfileMetrics(profileId);
+}
+
+export function getMetricHistory(profileId: number, metricId: number) {
+  return metricHistory().getMetricHistory(profileId, metricId);
+}
+
+export function addFavoriteMetric(profileId: number, metricId: number) {
+  return favoriteMetrics().add(profileId, metricId);
+}
+
+export function removeFavoriteMetric(profileId: number, metricId: number) {
+  return favoriteMetrics().remove(profileId, metricId);
+}
+
+export function moveFavoriteMetric(
+  profileId: number,
+  metricId: number,
+  direction: "up" | "down",
+) {
+  return favoriteMetrics().move(profileId, metricId, direction);
+}
+
 function profiles() {
   if (!profileRepository) {
     profileRepository = createSqliteProfileRepository(getDatabase());
@@ -171,4 +209,22 @@ function confirmer() {
   }
 
   return confirmationService;
+}
+
+function metricHistory() {
+  if (!metricHistoryRepository) {
+    metricHistoryRepository = createSqliteMetricHistoryQueryRepository(
+      getDatabase(),
+    );
+  }
+  return metricHistoryRepository;
+}
+
+function favoriteMetrics() {
+  if (!favoriteMetricRepository) {
+    favoriteMetricRepository = createSqliteFavoriteMetricCommandRepository(
+      getDatabase(),
+    );
+  }
+  return favoriteMetricRepository;
 }

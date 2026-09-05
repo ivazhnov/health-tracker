@@ -447,4 +447,20 @@ export const migrations: Migration[] = [
       JOIN import_sessions i ON i.id = l.import_session_id;
     `,
   },
+  {
+    version: 7,
+    name: "favorite_metrics",
+    sql: `
+      CREATE TABLE favorite_metrics (
+        profile_id INTEGER NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+        metric_definition_id INTEGER NOT NULL REFERENCES metric_definitions(id),
+        sort_order INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (profile_id, metric_definition_id)
+      );
+
+      CREATE INDEX favorite_metrics_profile_order
+      ON favorite_metrics (profile_id, sort_order, metric_definition_id);
+    `,
+  },
 ];

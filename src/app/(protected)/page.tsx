@@ -2,9 +2,13 @@ import Link from "next/link";
 import { cookies } from "next/headers";
 import { logoutAction, selectProfileAction } from "@/app/actions";
 import { ImportList } from "@/app/imports/import-list";
+import { moveFavoriteMetricAction } from "@/app/metrics/actions";
+import { MetricChart } from "@/app/metrics/metric-chart";
 import {
   getApplicationStatus,
+  getProfileArchiveStats,
   listImports,
+  listProfileMetrics,
   listProfiles,
 } from "@/server/services";
 
@@ -23,6 +27,15 @@ export default async function Home({ searchParams }: HomeProps) {
   const recentImports = activeProfile
     ? listImports(activeProfile.id).slice(0, 5)
     : [];
+  const activeMetrics = activeProfile
+    ? listProfileMetrics(activeProfile.id)
+    : [];
+  const favoriteMetrics = activeMetrics
+    .filter((metric) => metric.favoriteOrder !== null)
+    .sort((first, second) => first.favoriteOrder! - second.favoriteOrder!);
+  const archiveStats = activeProfile
+    ? getProfileArchiveStats(activeProfile.id)
+    : null;
   const status = getApplicationStatus();
   const { error, saved } = await searchParams;
 
@@ -120,6 +133,104 @@ export default async function Home({ searchParams }: HomeProps) {
                   Загрузить анализы
                 </Link>
               </div>
+              {archiveStats ? (
+                <div className="archive-stats" aria-label="Статистика архива">
+                  <ArchiveStat
+                    label="Анализов"
+                    value={archiveStats.labSessionCount}
+                  />
+                  <ArchiveStat
+                    label="Измерений"
+                    value={archiveStats.observationCount}
+                  />
+                  <ArchiveStat
+                    label="Документов"
+                    value={archiveStats.documentCount}
+                  />
+                </div>
+              ) : null}
+              <div className="recent-imports-heading favorites-heading">
+                <h3>Избранные показатели</h3>
+                <Link href={`/profiles/${activeProfile.id}/metrics`}>
+                  Все показатели
+                </Link>
+              </div>
+              {favoriteMetrics.length ? (
+                <div className="favorite-grid">
+                  {favoriteMetrics.map((metric, index) => (
+                    <article className="favorite-card" key={metric.id}>
+                      <div className="favorite-card-heading">
+                        <div>
+                          <span>{metric.category}</span>
+                          <Link
+                            href={`/profiles/${activeProfile.id}/metrics/${metric.id}`}
+                          >
+                            {metric.displayName}
+                          </Link>
+                        </div>
+                        <div
+                          className="favorite-order"
+                          aria-label="Порядок избранного"
+                        >
+                          <form
+                            action={moveFavoriteMetricAction.bind(
+                              null,
+                              activeProfile.id,
+                              metric.id,
+                              "up",
+                            )}
+                          >
+                            <button
+                              disabled={index === 0}
+                              title="Выше"
+                              type="submit"
+                            >
+                              ↑
+                            </button>
+                          </form>
+                          <form
+                            action={moveFavoriteMetricAction.bind(
+                              null,
+                              activeProfile.id,
+                              metric.id,
+                              "down",
+                            )}
+                          >
+                            <button
+                              disabled={index === favoriteMetrics.length - 1}
+                              title="Ниже"
+                              type="submit"
+                            >
+                              ↓
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                      <div className="favorite-value">
+                        <strong>{metricValue(metric.latest)}</strong>
+                        <span>
+                          {formatShortDate(metric.latest.collectedAt)} ·{" "}
+                          {metricReference(metric.latest)}
+                        </span>
+                      </div>
+                      <MetricChart compact points={metric.points} />
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-favorites">
+                  <p>
+                    Добавьте важные показатели — их последние значения и
+                    динамика появятся здесь.
+                  </p>
+                  <Link
+                    className="secondary-button"
+                    href={`/profiles/${activeProfile.id}/metrics`}
+                  >
+                    Выбрать показатели
+                  </Link>
+                </div>
+              )}
               <div className="recent-imports-heading">
                 <h3>Последние загрузки</h3>
                 <Link href="/imports">Вся история</Link>
@@ -136,6 +247,44 @@ export default async function Home({ searchParams }: HomeProps) {
       </footer>
     </main>
   );
+}
+
+function ArchiveStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  );
+}
+
+function metricValue(value: {
+  comparator: string | null;
+  valueText: string;
+  unit: string | null;
+}) {
+  return `${value.valueText}${value.unit ? ` ${value.unit}` : ""}`;
+}
+
+function metricReference(value: {
+  referenceLow: number | null;
+  referenceHigh: number | null;
+  referenceText: string | null;
+}) {
+  if (value.referenceText) return `референс ${value.referenceText}`;
+  if (value.referenceLow !== null && value.referenceHigh !== null) {
+    return `референс ${value.referenceLow}–${value.referenceHigh}`;
+  }
+  if (value.referenceHigh !== null) return `референс до ${value.referenceHigh}`;
+  if (value.referenceLow !== null) return `референс от ${value.referenceLow}`;
+  return "без референса";
+}
+
+function formatShortDate(value: string) {
+  return new Intl.DateTimeFormat("ru-RU", {
+    dateStyle: "medium",
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00Z`));
 }
 
 function fullName(firstName: string, lastName: string) {
