@@ -1511,9 +1511,10 @@ p {
 .review-table input, .review-table select { width: 100%; min-width: 0; height: 28px; padding: 3px 5px; background: transparent; border: 1px solid transparent; border-radius: 4px; font-size: 11px; }
 .review-table select:hover, .review-table input:hover { border-color: var(--border); background: var(--surface); }
 .review-table input:focus, .review-table select:focus { background: var(--surface); border-color: var(--accent); outline: 0; }
-.metric-editor { display: grid; min-width: 0; align-content: start; }
-.metric-editor select { overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
-.metric-editor small, .metric-editor em { display: block; min-width: 0; max-width: 100%; margin-top: 2px; overflow: hidden; color: var(--muted); font-size: 9px; font-style: normal; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.metric-editor { position: relative; display: grid; min-width: 0; align-content: start; }
+.metric-editor::after { position: absolute; top: 9px; right: 9px; width: 6px; height: 6px; border-right: 1.5px solid var(--muted); border-bottom: 1.5px solid var(--muted); content: ""; pointer-events: none; transform: rotate(45deg); }
+.metric-editor select { padding: 3px 24px 3px 5px; overflow: hidden; appearance: none; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.metric-editor small, .metric-editor em { display: block; min-width: 0; max-width: 100%; margin-top: 2px; padding: 0 5px 0 10px; overflow: hidden; color: var(--muted); font-size: 9px; font-style: normal; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
 .metric-editor em { color: color-mix(in srgb, var(--muted) 75%, transparent); }
 .result-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(42px, .65fr); }
 .result-editor input + input { border-left-color: var(--border); border-radius: 0 4px 4px 0; }
