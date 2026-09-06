@@ -10,6 +10,7 @@ import type {
   ValidatedConfirmation,
   ValidatedObservation,
 } from "@/server/confirmation";
+import { parseNumericResult } from "../numeric-result.ts";
 
 type MetricRow = {
   id: number;
@@ -422,11 +423,16 @@ function sameObservation(
   existing: ObservationRow,
   incoming: ValidatedObservation,
 ) {
+  const recovered = existing.value_numeric === null && existing.comparator === null
+    ? parseNumericResult(existing.value_text)
+    : null;
+  const existingNumeric = existing.value_numeric ?? recovered?.valueNumeric ?? null;
+  const existingComparator = existing.comparator ?? recovered?.comparator ?? null;
   return (
-    existing.value_numeric === incoming.valueNumeric &&
+    existingNumeric === incoming.valueNumeric &&
     (incoming.valueNumeric !== null ||
       existing.value_text === incoming.valueText) &&
-    existing.comparator === incoming.comparator &&
+    existingComparator === incoming.comparator &&
     normalizeDeduplicationText(existing.unit) ===
       normalizeDeduplicationText(incoming.unit)
   );

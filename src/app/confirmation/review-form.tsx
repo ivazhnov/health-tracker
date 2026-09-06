@@ -31,7 +31,8 @@ type ReviewRow = {
 };
 
 const INITIAL_STATE: ConfirmationActionState = { error: null, conflicts: [] };
-const NUMBER_VALUE = /^([<>]=?|≤|≥)?\s*-?\d+(?:[.,]\d+)?$/;
+const NUMBER_VALUE =
+  /^([<>]=?|≤|≥)?\s*-?\d+(?:[.,]\d+)?(?:\s+[+\-−])?$/;
 
 export function ReviewForm({
   importSessionId,

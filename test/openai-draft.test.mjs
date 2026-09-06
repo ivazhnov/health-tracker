@@ -52,6 +52,15 @@ test("AI mapping uses catalogue labels and rejects invented IDs or evidence", ()
   );
 });
 
+test("AI draft removes a standalone laboratory flag from a numeric value", () => {
+  const flagged = draft();
+  flagged.observations[0].valueText = "3.1 +";
+  assert.equal(
+    parseAiDraft(flagged, text, aliases, "test").observations[0].valueText,
+    "3.1",
+  );
+});
+
 test("AI adapter sends a strict schema and refuses incomplete responses", async () => {
   const request = async (_url, options) => {
     const sent = JSON.parse(options.body);

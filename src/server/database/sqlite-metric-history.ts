@@ -7,6 +7,7 @@ import type {
   ObservationSource,
   ProfileMetric,
 } from "@/server/metric-history";
+import { parseNumericResult } from "../numeric-result.ts";
 
 type MetricRow = {
   id: number;
@@ -276,13 +277,16 @@ function mapProfileMetric(
 }
 
 function mapPoint(row: ObservationRow): MetricPoint {
+  const recovered = row.value_numeric === null && row.comparator === null
+    ? parseNumericResult(row.value_text)
+    : null;
   return {
     specimen: row.specimen,
     observationId: row.observation_id,
     collectedAt: row.collected_at,
-    valueNumeric: row.value_numeric,
-    valueText: row.value_text,
-    comparator: row.comparator,
+    valueNumeric: row.value_numeric ?? recovered?.valueNumeric ?? null,
+    valueText: recovered?.valueText ?? row.value_text,
+    comparator: row.comparator ?? recovered?.comparator ?? null,
     unit: row.unit,
     referenceLow: row.reference_low,
     referenceHigh: row.reference_high,

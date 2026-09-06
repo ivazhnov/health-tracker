@@ -3,6 +3,7 @@ import type {
   MetricAlias,
   RecognitionDraft,
 } from "@/server/recognition";
+import { parseNumericResult } from "./numeric-result.ts";
 const nullableText = { type: ["string", "null"] };
 const rowProperties = {
   metricDefinitionId: { type: ["integer", "null"] },
@@ -75,6 +76,7 @@ Do not map urine creatinine to blood creatinine or merge different eGFR methods 
 For absent metrics return null ID and a concise canonical Russian displayName and category.
 Include the sample context in a new canonical name only when it changes the medical meaning, for example urine creatinine versus blood creatinine. Reuse equivalent canonical names.
 Copy sourceText verbatim from the supplied text for every row. confidence reflects extraction and mapping certainty.
+Treat a standalone + or - after a number as a laboratory high/low flag, not as part of the value.
 Never infer reference ranges; copy them from the report.
 All warnings, canonical names and categories must be Russian.`,
           input: JSON.stringify({ catalogue, documentText: text }),
@@ -169,6 +171,8 @@ export function parseAiDraft(
       throw new Error("Invalid confidence");
     if (!text.includes(row.sourceText))
       throw new Error("Missing source evidence");
+    const numericResult = parseNumericResult(row.valueText);
+    if (numericResult) row.valueText = numericResult.valueText;
     if (row.metricDefinitionId !== null) {
       const metric = catalogue.get(row.metricDefinitionId);
       if (!metric) throw new Error("Unknown catalogue ID");

@@ -100,6 +100,27 @@ test("text results remain visible in history without a numeric chart point", () 
   database.close();
 });
 
+test("history recovers legacy numbers with a standalone laboratory flag without rewriting them", () => {
+  const database = createDatabase();
+  seedHistory(database);
+  database.exec("UPDATE confirmed_observations SET value_text = '2.8 +', value_numeric = NULL WHERE id = 2");
+  const queries = createSqliteMetricHistoryQueryRepository(database);
+  const latest = queries.listProfileMetrics(1).find(({ id }) => id === 1).latest;
+
+  assert.equal(latest.valueText, "2.8");
+  assert.equal(latest.valueNumeric, 2.8);
+  assert.equal(buildChartGeometry([latest], 320, 110, 12).points.length, 1);
+  assert.deepEqual(
+    {
+      ...database
+        .prepare("SELECT value_text, value_numeric FROM confirmed_observations WHERE id = 2")
+        .get(),
+    },
+    { value_text: "2.8 +", value_numeric: null },
+  );
+  database.close();
+});
+
 function createDatabase() {
   const database = new DatabaseSync(":memory:");
   database.exec("PRAGMA foreign_keys = ON");

@@ -7,9 +7,9 @@ import type {
   ValidatedConfirmation,
   ValidatedObservation,
 } from "@/server/confirmation";
+import { parseNumericResult } from "./numeric-result.ts";
 
 const NUMBER = /^-?\d+(?:[.,]\d+)?$/;
-const VALUE = /^([<>]=?|≤|≥)?\s*(-?\d+(?:[.,]\d+)?)$/;
 
 export function createConfirmationService(repository: ConfirmationRepository) {
   return {
@@ -175,18 +175,14 @@ function validateObservation(
   if (!valueText || valueText.length > 200) {
     return invalid("укажите результат до 200 символов.");
   }
-  const value = valueText.match(VALUE);
-  if (!textResult && !value) {
+  const numericResult = textResult ? null : parseNumericResult(valueText);
+  if (!textResult && !numericResult) {
     return invalid(
       "значение должно быть числом, можно со знаком <, ≤, > или ≥.",
     );
   }
-  const comparator = textResult ? null : normalizeComparator(value![1]);
-  const numericText = textResult ? "" : value![2].replace(",", ".");
-  const valueNumeric = textResult ? null : Number(numericText);
-  if (valueNumeric !== null && !Number.isFinite(valueNumeric)) {
-    return invalid("значение должно быть конечным числом.");
-  }
+  const comparator = numericResult?.comparator ?? null;
+  const valueNumeric = numericResult?.valueNumeric ?? null;
 
   const unit = optionalText(input.unit, 50);
   if (unit === undefined) return invalid("единица слишком длинная.");
@@ -211,7 +207,7 @@ function validateObservation(
     value: {
       metricDefinitionId,
       originalName,
-      valueText: textResult ? valueText : `${comparator ?? ""}${numericText}`,
+      valueText: textResult ? valueText : numericResult!.valueText,
       valueNumeric,
       comparator,
       unit,
@@ -235,13 +231,6 @@ function optionalText(value: string, maxLength: number) {
   const normalized = value.trim();
   if (normalized.length > maxLength) return undefined;
   return normalized || null;
-}
-
-function normalizeComparator(value: string | undefined) {
-  if (!value) return null;
-  if (value === "≤") return "<=";
-  if (value === "≥") return ">=";
-  return value as "<" | "<=" | ">" | ">=";
 }
 
 function validDate(value: string) {

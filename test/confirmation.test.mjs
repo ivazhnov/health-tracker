@@ -427,6 +427,20 @@ test("invalid numbers are not silently accepted as text", () => {
   database.close();
 });
 
+test("a standalone laboratory flag is not stored as part of a number", () => {
+  const database = createDatabase();
+  const repository = createSqliteConfirmationRepository(database);
+  const service = createConfirmationService(repository);
+  const input = confirmationInput();
+  input.observations[0].valueText = "3.1 +";
+
+  assert.equal(service.confirm(input).ok, true);
+  const saved = repository.getConfirmed(1).observations[0];
+  assert.equal(saved.valueText, "3.1");
+  assert.equal(saved.valueNumeric, 3.1);
+  database.close();
+});
+
 test("new confirmations leave legacy specimen columns empty", () => {
   const database = createDatabase();
   const service = createConfirmationService(
